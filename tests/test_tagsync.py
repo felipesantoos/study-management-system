@@ -29,6 +29,32 @@ if "aqt" not in sys.modules:
 if "aqt.operations" not in sys.modules:
     sys.modules["aqt.operations"] = types.ModuleType("aqt.operations")
 
+# aqt.utils stub — provides a mock tooltip callable.
+if "aqt.utils" not in sys.modules:
+    sys.modules["aqt.utils"] = types.ModuleType("aqt.utils")
+_aqt_utils = sys.modules["aqt.utils"]
+_aqt_utils.tooltip = MagicMock(name="tooltip")
+
+
+class _SyncCollectionOp:
+    """Test stub: runs op and success callback synchronously."""
+
+    def __init__(self, parent, op):
+        self._op_fn = op
+        self._success_fn = None
+
+    def success(self, fn):
+        self._success_fn = fn
+        return self
+
+    def run_in_background(self):
+        result = self._op_fn(_mock_mw.col)
+        if self._success_fn is not None:
+            self._success_fn(result)
+
+
+sys.modules["aqt.operations"].CollectionOp = _SyncCollectionOp
+
 # ---------------------------------------------------------------------------
 # Load tagsync inside a synthetic package so relative imports resolve
 # ---------------------------------------------------------------------------
@@ -323,3 +349,196 @@ def test_tag_for_assignment_topic_priority_over_subject():
         "topic_name": "Limits",
     }
     assert _tag_for_assignment(row) == "smsys::Mathematics::Calculus::Limits"
+
+
+# ---------------------------------------------------------------------------
+# Helpers for backfill tests
+# ---------------------------------------------------------------------------
+
+
+def _make_row(note_id, discipline, subject=None, topic=None):
+    """Build a fake get_all_note_assignments row dict."""
+    return {
+        "note_id": note_id,
+        "direct_discipline_id": None if (subject or topic) else 1,
+        "direct_subject_id": 1 if (subject and not topic) else None,
+        "direct_topic_id": 1 if topic else None,
+        "discipline_name": discipline,
+        "subject_name": subject,
+        "topic_name": topic,
+    }
+
+
+class _MockNote:
+    def __init__(self, tags=()):
+        self.tags = list(tags)
+
+
+def _setup_col(note_map: dict) -> None:
+    """Configure _mock_mw.col for a backfill test."""
+    _mock_mw.col.get_note.side_effect = lambda nid: note_map.get(nid, _MockNote())
+    _mock_mw.col.add_custom_undo_entry.return_value = 42
+    _mock_mw.col.merge_undo_entries.return_value = None
+    _mock_mw.col.update_note.reset_mock()
+
+
+# ---------------------------------------------------------------------------
+# backfill_all()
+# ---------------------------------------------------------------------------
+
+
+def test_backfill_all_no_assignments():
+    """Zero assignments → tooltip 'Tags already in sync.', no update_note calls."""
+    _db_stub.db.return_value.get_all_note_assignments.return_value = []
+    _aqt_utils.tooltip.reset_mock()
+    _mock_mw.col.update_note.reset_mock()
+
+    tagsync.backfill_all()
+
+    _aqt_utils.tooltip.assert_called_once_with("Tags already in sync.")
+    _mock_mw.col.update_note.assert_not_called()
+
+
+def test_backfill_all_assigns_discipline_tag():
+    """Discipline-level assignment → smsys::Discipline added, update_note called."""
+    note = _MockNote()
+    _db_stub.db.return_value.get_all_note_assignments.return_value = [
+        _make_row(1001, "Mathematics"),
+    ]
+    _setup_col({1001: note})
+    _aqt_utils.tooltip.reset_mock()
+
+    tagsync.backfill_all()
+
+    _mock_mw.col.update_note.assert_called_once()
+    assert note.tags == ["smsys::Mathematics"]
+    _aqt_utils.tooltip.assert_called_once_with("Synced 1 subject tag(s).")
+
+
+def test_backfill_all_assigns_subject_tag():
+    """Subject-level assignment → smsys::D::S added."""
+    note = _MockNote()
+    _db_stub.db.return_value.get_all_note_assignments.return_value = [
+        _make_row(1002, "Mathematics", subject="Calculus"),
+    ]
+    _setup_col({1002: note})
+
+    tagsync.backfill_all()
+
+    assert note.tags == ["smsys::Mathematics::Calculus"]
+
+
+def test_backfill_all_assigns_topic_tag():
+    """Topic-level assignment → smsys::D::S::T added."""
+    note = _MockNote()
+    _db_stub.db.return_value.get_all_note_assignments.return_value = [
+        _make_row(1003, "Mathematics", subject="Calculus", topic="Limits"),
+    ]
+    _setup_col({1003: note})
+
+    tagsync.backfill_all()
+
+    assert note.tags == ["smsys::Mathematics::Calculus::Limits"]
+
+
+def test_backfill_all_idempotent():
+    """Notes already carrying the correct tag → zero update_note calls."""
+    note = _MockNote(["smsys::Mathematics"])
+    _db_stub.db.return_value.get_all_note_assignments.return_value = [
+        _make_row(1001, "Mathematics"),
+    ]
+    _setup_col({1001: note})
+    _aqt_utils.tooltip.reset_mock()
+
+    tagsync.backfill_all()
+
+    _mock_mw.col.update_note.assert_not_called()
+    _aqt_utils.tooltip.assert_called_once_with("Tags already in sync.")
+
+
+def test_backfill_all_replaces_wrong_smsys_tag():
+    """Note with a stale smsys tag → tag replaced, update_note called once."""
+    note = _MockNote(["smsys::OldDiscipline"])
+    _db_stub.db.return_value.get_all_note_assignments.return_value = [
+        _make_row(1001, "Mathematics"),
+    ]
+    _setup_col({1001: note})
+
+    tagsync.backfill_all()
+
+    _mock_mw.col.update_note.assert_called_once()
+    assert note.tags == ["smsys::Mathematics"]
+
+
+def test_backfill_all_preserves_non_smsys_tags():
+    """Non-smsys tags on a note survive the backfill."""
+    note = _MockNote(["some-other-tag"])
+    _db_stub.db.return_value.get_all_note_assignments.return_value = [
+        _make_row(1001, "Mathematics"),
+    ]
+    _setup_col({1001: note})
+
+    tagsync.backfill_all()
+
+    assert "some-other-tag" in note.tags
+    assert "smsys::Mathematics" in note.tags
+
+
+def test_backfill_all_multiple_notes():
+    """Multiple assigned notes all get correct tags; tooltip reports count."""
+    note_a = _MockNote()
+    note_b = _MockNote(["smsys::Mathematics::Calculus"])  # already correct
+    note_c = _MockNote()
+    _db_stub.db.return_value.get_all_note_assignments.return_value = [
+        _make_row(10, "Mathematics"),
+        _make_row(11, "Mathematics", subject="Calculus"),
+        _make_row(12, "Physics", subject="Mechanics", topic="Newton"),
+    ]
+    _setup_col({10: note_a, 11: note_b, 12: note_c})
+    _aqt_utils.tooltip.reset_mock()
+
+    tagsync.backfill_all()
+
+    assert note_a.tags == ["smsys::Mathematics"]
+    assert note_b.tags == ["smsys::Mathematics::Calculus"]  # unchanged
+    assert note_c.tags == ["smsys::Physics::Mechanics::Newton"]
+    # note_b was already correct → only 2 actual updates
+    assert _mock_mw.col.update_note.call_count == 2
+    _aqt_utils.tooltip.assert_called_once_with("Synced 2 subject tag(s).")
+
+
+# ---------------------------------------------------------------------------
+# on_config_changed() — backfill trigger
+# ---------------------------------------------------------------------------
+
+
+def test_on_config_changed_triggers_backfill_on_off_to_on():
+    """off→on transition calls backfill_all()."""
+    from unittest.mock import patch
+
+    tagsync._sync_enabled = False
+    with patch.object(tagsync, "backfill_all") as mock_backfill:
+        tagsync.on_config_changed({"sync_anki_tags": True})
+        mock_backfill.assert_called_once()
+    assert tagsync._sync_enabled is True
+
+
+def test_on_config_changed_no_backfill_when_already_enabled():
+    """on→on: no backfill triggered."""
+    from unittest.mock import patch
+
+    tagsync._sync_enabled = True
+    with patch.object(tagsync, "backfill_all") as mock_backfill:
+        tagsync.on_config_changed({"sync_anki_tags": True})
+        mock_backfill.assert_not_called()
+
+
+def test_on_config_changed_no_backfill_on_disable():
+    """on→off: no backfill triggered, sync disabled."""
+    from unittest.mock import patch
+
+    tagsync._sync_enabled = True
+    with patch.object(tagsync, "backfill_all") as mock_backfill:
+        tagsync.on_config_changed({"sync_anki_tags": False})
+        mock_backfill.assert_not_called()
+    assert tagsync._sync_enabled is False

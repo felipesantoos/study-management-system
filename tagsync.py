@@ -46,8 +46,10 @@ def enabled() -> bool:
 
 def on_config_changed(cfg: dict) -> None:
     global _sync_enabled
+    was_enabled = _sync_enabled
     _sync_enabled = bool(cfg.get("sync_anki_tags", False))
-    # Phase 5 will trigger backfill_all() here when transitioning False→True.
+    if _sync_enabled and not was_enabled:
+        backfill_all()
 
 
 # ---------------------------------------------------------------------------
@@ -115,10 +117,11 @@ def tag_for(
 # ---------------------------------------------------------------------------
 
 
-def _set_note_tag(col, note_id: int, new_tag: str | None) -> None:
+def _set_note_tag(col, note_id: int, new_tag: str | None) -> bool:
     """Strip all smsys:: tags from one note and optionally append new_tag.
 
     Single entry-point for every tag write; one note.tags assignment per call.
+    Returns True if the note was actually modified.
     """
     note = col.get_note(note_id)
     new_list = [t for t in note.tags if not _is_smsys_tag(t)]
@@ -127,6 +130,8 @@ def _set_note_tag(col, note_id: int, new_tag: str | None) -> None:
     if new_list != note.tags:
         note.tags = new_list
         col.update_note(note)
+        return True
+    return False
 
 
 def _execute_batch(
@@ -229,5 +234,51 @@ def _refresh_notes(note_ids: list[int]) -> None:
 
 
 def backfill_all() -> None:
-    """Backfill smsys tags for all assigned notes (phase 5 fills this)."""
-    pass
+    """Backfill smsys tags for all assigned notes (off→on transition).
+
+    Chunks by 500 notes, each chunk in a CollectionOp for UI responsiveness.
+    Idempotent: a second run produces zero update_note calls when already in sync.
+    """
+    from aqt.utils import tooltip
+
+    database = _db_global()
+    rows = database.get_all_note_assignments()
+
+    if not rows:
+        tooltip("Tags already in sync.")
+        return
+
+    tag_map: dict[int, str | None] = {
+        int(row["note_id"]): _tag_for_assignment(row) for row in rows
+    }
+    note_ids = list(tag_map.keys())
+
+    CHUNK_SIZE = 500
+    chunks = [note_ids[i : i + CHUNK_SIZE] for i in range(0, len(note_ids), CHUNK_SIZE)]
+    total_chunks = len(chunks)
+
+    # Shared counters — safe because CollectionOps serialize on the col lock.
+    total_updated = [0]
+    completed = [0]
+
+    from aqt.operations import CollectionOp
+
+    def _make_chunk_op(chunk: list[int]):
+        def _op(col):
+            undo_id = col.add_custom_undo_entry("Backfill smsys:: tags")
+            for nid in chunk:
+                total_updated[0] += _set_note_tag(col, nid, tag_map[nid])
+            return col.merge_undo_entries(undo_id)
+
+        def _on_success(_result) -> None:
+            completed[0] += 1
+            if completed[0] == total_chunks:
+                n = total_updated[0]
+                msg = f"Synced {n} subject tag(s)." if n else "Tags already in sync."
+                tooltip(msg)
+
+        return _op, _on_success
+
+    for chunk in chunks:
+        op_fn, success_fn = _make_chunk_op(chunk)
+        CollectionOp(parent=mw, op=op_fn).success(success_fn).run_in_background()

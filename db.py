@@ -204,7 +204,9 @@ class SubjectsDB:
                           WHERE subject_id = s.id)
                      + (SELECT COUNT(*) FROM note_assignments na
                           JOIN topics t ON t.id = na.topic_id
-                          WHERE t.subject_id = s.id) AS note_count
+                          WHERE t.subject_id = s.id) AS note_count,
+                       (SELECT COUNT(*) FROM topics
+                          WHERE subject_id = s.id) AS topic_count
                   FROM subjects s
                  WHERE s.discipline_id = ?
                  ORDER BY s.position, s.name
@@ -386,6 +388,32 @@ class SubjectsDB:
             [(int(n), d_id, s_id, t_id) for n in note_ids],
         )
         self.con.commit()
+
+    def get_all_note_assignments(self) -> list[sqlite3.Row]:
+        """Return every assigned note with fully resolved name chains."""
+        return list(
+            self.con.execute(
+                """
+                SELECT na.note_id,
+                       na.discipline_id AS direct_discipline_id,
+                       na.subject_id    AS direct_subject_id,
+                       na.topic_id      AS direct_topic_id,
+                       COALESCE(d.id, sd.id, td.id) AS discipline_id,
+                       COALESCE(d.name, sd.name, td.name) AS discipline_name,
+                       COALESCE(s.id, ts.id) AS subject_id,
+                       COALESCE(s.name, ts.name) AS subject_name,
+                       t.id   AS topic_id,
+                       t.name AS topic_name
+                  FROM note_assignments na
+                  LEFT JOIN disciplines d  ON d.id  = na.discipline_id
+                  LEFT JOIN subjects    s  ON s.id  = na.subject_id
+                  LEFT JOIN disciplines sd ON sd.id = s.discipline_id
+                  LEFT JOIN topics      t  ON t.id  = na.topic_id
+                  LEFT JOIN subjects    ts ON ts.id = t.subject_id
+                  LEFT JOIN disciplines td ON td.id = ts.discipline_id
+                """
+            )
+        )
 
     def get_note_assignment(self, note_id: int) -> sqlite3.Row | None:
         """Return the note's current placement plus the resolved chain of
