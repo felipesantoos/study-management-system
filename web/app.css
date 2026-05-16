@@ -449,11 +449,16 @@
 .smsys-tree-meta .smsys-subject-stats { width: 120px; flex-shrink: 0; margin: 0; }
 
 .smsys-tree-actions {
-    display: flex;
-    justify-content: flex-end;
+    /* Intrinsic width — the container shrinks to the exact sum of its
+       buttons + gaps. `flex: 0 0 auto` belts-and-braces against any
+       parent that might otherwise let it grow. Buttons pack from the
+       start, so a row with fewer buttons stays tight on the left edge
+       of its zone (no internal padding/justification space). */
+    display: inline-flex;
     align-items: center;
+    justify-content: flex-start;
     gap: var(--smsys-space-1);
-    flex-shrink: 0;
+    flex: 0 0 auto;
     opacity: 0;
     transition: opacity var(--smsys-duration-micro) var(--smsys-ease);
 }
