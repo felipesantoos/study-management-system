@@ -1,0 +1,219 @@
+/* Study Management System — base styles.
+ * Anki sets `night-mode` on <body> (and `data-bs-theme="dark"` on <html>)
+ * when dark mode is active. Light is the default. */
+
+:root {
+    --smsys-bg: #ffffff;
+    --smsys-fg: #2c3e50;
+    --smsys-muted: #6c757d;
+    --smsys-border: #e0e0e0;
+    --smsys-accent: #0d6efd;
+    --smsys-accent-fg: #ffffff;
+    --smsys-hover: #f3f5f7;
+    --smsys-sidebar-bg: #f7f8fa;
+    --smsys-danger: #dc3545;
+}
+
+.night-mode {
+    --smsys-bg: #1d1d20;
+    --smsys-fg: #e6e6e6;
+    --smsys-muted: #9aa0a6;
+    --smsys-border: #2e2e32;
+    --smsys-accent: #4ea3ff;
+    --smsys-accent-fg: #0a0a0a;
+    --smsys-hover: #28282c;
+    --smsys-sidebar-bg: #18181b;
+    --smsys-danger: #ff6b6b;
+}
+
+#smsys-root {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    background: var(--smsys-bg);
+    color: var(--smsys-fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 14px;
+    overflow: hidden;
+}
+
+/* ----- sidebar ----- */
+.smsys-sidebar {
+    width: 220px;
+    flex: 0 0 220px;
+    background: var(--smsys-sidebar-bg);
+    border-right: 1px solid var(--smsys-border);
+    padding: 16px 0;
+    overflow-y: auto;
+}
+
+.smsys-sidebar-title {
+    padding: 0 16px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--smsys-muted);
+}
+
+.smsys-nav-item {
+    display: block;
+    padding: 8px 16px;
+    color: var(--smsys-fg);
+    text-decoration: none;
+    border-left: 3px solid transparent;
+    cursor: pointer;
+    user-select: none;
+}
+
+.smsys-nav-item:hover {
+    background: var(--smsys-hover);
+}
+
+.smsys-nav-item.is-active {
+    background: var(--smsys-hover);
+    border-left-color: var(--smsys-accent);
+    font-weight: 600;
+}
+
+/* ----- main ----- */
+.smsys-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow-y: auto;
+}
+
+.smsys-page {
+    padding: 24px 32px;
+    max-width: 900px;
+}
+
+.smsys-page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+}
+
+.smsys-page-title {
+    font-size: 22px;
+    font-weight: 600;
+    margin: 0;
+}
+
+/* ----- buttons ----- */
+.smsys-btn {
+    display: inline-block;
+    padding: 6px 12px;
+    margin: 0 4px 0 0;
+    background: var(--smsys-bg);
+    color: var(--smsys-fg);
+    border: 1px solid var(--smsys-border);
+    border-radius: 4px;
+    font: inherit;
+    cursor: pointer;
+}
+.smsys-btn:hover { background: var(--smsys-hover); }
+.smsys-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.smsys-btn-primary {
+    background: var(--smsys-accent);
+    border-color: var(--smsys-accent);
+    color: var(--smsys-accent-fg);
+}
+.smsys-btn-primary:hover { filter: brightness(1.1); }
+
+.smsys-btn-danger { color: var(--smsys-danger); }
+
+/* ----- tree (disciplines / subjects) ----- */
+.smsys-tree { margin-top: 8px; }
+
+.smsys-tree-discipline {
+    margin: 8px 0;
+    border: 1px solid var(--smsys-border);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.smsys-tree-row {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    cursor: pointer;
+    user-select: none;
+}
+.smsys-tree-row:hover { background: var(--smsys-hover); }
+
+.smsys-tree-row.is-discipline {
+    font-weight: 600;
+    background: var(--smsys-sidebar-bg);
+}
+
+.smsys-tree-row.is-subject { padding-left: 32px; }
+
+.smsys-tree-caret {
+    width: 16px;
+    text-align: center;
+    margin-right: 4px;
+    color: var(--smsys-muted);
+}
+
+.smsys-tree-name { flex: 1; }
+
+.smsys-tree-actions {
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.1s;
+}
+.smsys-tree-row:hover .smsys-tree-actions { opacity: 1; }
+
+.smsys-tree-action {
+    background: transparent;
+    border: none;
+    color: var(--smsys-muted);
+    cursor: pointer;
+    font: inherit;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+.smsys-tree-action:hover {
+    background: var(--smsys-bg);
+    color: var(--smsys-fg);
+}
+
+.smsys-empty {
+    color: var(--smsys-muted);
+    padding: 12px;
+    text-align: center;
+    font-style: italic;
+}
+
+/* ----- toolbar within a page ----- */
+.smsys-page-actions {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+/* ----- toasts (lightweight) ----- */
+.smsys-toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--smsys-fg);
+    color: var(--smsys-bg);
+    padding: 8px 16px;
+    border-radius: 4px;
+    z-index: 1000;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+.smsys-toast.is-visible { opacity: 0.92; }
