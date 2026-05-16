@@ -805,11 +805,13 @@ async function renderDiscipline(d, refreshAll) {
         makeStatusDot(d, "discipline"),
         h("span.smsys-tree-name", { title: d.name }, d.name),
         h(".smsys-tree-meta", null,
-            h("span.smsys-badge.smsys-meta-notes", `${d.note_count} notes`),
-            d.subject_count > 0
-                ? h("span.smsys-badge.smsys-meta-extra",
-                    `${d.subject_count} subject${d.subject_count === 1 ? "" : "s"}`)
-                : h("span.smsys-meta-extra"),
+            h(".smsys-meta-badges", null,
+                h("span.smsys-badge.smsys-meta-notes", `${d.note_count} notes`),
+                d.subject_count > 0
+                    ? h("span.smsys-badge.smsys-meta-extra",
+                        `${d.subject_count} subject${d.subject_count === 1 ? "" : "s"}`)
+                    : null,
+            ),
             discStats.statsEl,
         ),
         h(".smsys-tree-actions", null,
@@ -857,6 +859,12 @@ async function renderDiscipline(d, refreshAll) {
                   "aria-label": `Show notes under ${d.name} in Browser`,
                   onClick: (e) => { e.stopPropagation(); onShowDisciplineNotes(d); } },
                 makeActionIcon("file")
+            ),
+            h("button.smsys-tree-action.smsys-tree-action--move",
+                { title: "Move all notes to another placement",
+                  "aria-label": `Move all notes from ${d.name} elsewhere`,
+                  onClick: (e) => { e.stopPropagation(); onMoveAllNotes("discipline", d, refreshAll); } },
+                makeActionIcon("arrow-right")
             ),
             h("button.smsys-tree-action.smsys-tree-action--add",
                 { title: "Add subject",
@@ -990,11 +998,13 @@ async function renderSubject(s, disciplineId, siblingContainer, refreshAll, stat
         makeStatusDot(s, "subject"),
         h("span.smsys-tree-name", { title: s.name }, s.name),
         h(".smsys-tree-meta", null,
-            h("span.smsys-badge.smsys-meta-notes", `${s.note_count} notes`),
-            s.topic_count > 0
-                ? h("span.smsys-badge.smsys-meta-extra",
-                    `${s.topic_count} topic${s.topic_count === 1 ? "" : "s"}`)
-                : h("span.smsys-meta-extra"),
+            h(".smsys-meta-badges", null,
+                h("span.smsys-badge.smsys-meta-notes", `${s.note_count} notes`),
+                s.topic_count > 0
+                    ? h("span.smsys-badge.smsys-meta-extra",
+                        `${s.topic_count} topic${s.topic_count === 1 ? "" : "s"}`)
+                    : null,
+            ),
             stats.statsEl,
         ),
         h(".smsys-tree-actions", null,
@@ -1136,11 +1146,9 @@ async function loadTopics(subjectId, container, refreshAll) {
             makeStatusDot(t, "topic"),
             h("span.smsys-tree-name", { title: t.name }, t.name),
             h(".smsys-tree-meta", null,
-                h("span.smsys-badge.smsys-meta-notes", `${t.note_count} notes`),
-                // Topic rows never have a "child count" badge; render an empty
-                // slot so the notes badge stays in the same grid column as the
-                // discipline and subject rows above.
-                h("span.smsys-meta-extra"),
+                h(".smsys-meta-badges", null,
+                    h("span.smsys-badge.smsys-meta-notes", `${t.note_count} notes`),
+                ),
                 stats.statsEl,
             ),
             h(".smsys-tree-actions", null,
@@ -1459,7 +1467,7 @@ async function onShowTopicNotes(t) {
 // ============================================================
 
 async function onMoveAllNotes(sourceKind, source, refreshAll) {
-    const ipcKind = sourceKind === "topic" ? "topics" : "subjects";
+    const ipcKind = sourceKind === "topic" ? "topics" : sourceKind === "discipline" ? "disciplines" : "subjects";
     let noteIds;
     try {
         noteIds = await invoke(`${ipcKind}.note_ids`, { id: source.id });
