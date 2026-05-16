@@ -64,24 +64,112 @@ export async function safeInvoke(method, params) {
     }
 }
 
-// ----- tiny toast helper (used by safeInvoke) -----
-let toastEl = null;
-let toastTimer = null;
+// ----- toast stack (top-right, up to 3, icon-prefixed, slide-in) -----
+//
+// Public API:
+//   toast("Saved.")                       // info (default)
+//   toast("Saved.", { type: "success" })  // success (green check)
+//   toast("Boom.", { type: "error" })     // error  (red x, 5s)
+//   toast("Note.", { type: "info"  })     // info   (brand i)
+//
+// Back-compat: { error: true } still works and maps to { type: "error" }.
+//
+// Behaviour contract:
+//   - Stacked top-right (newest on top). Cap = 3 visible at a time; the
+//     oldest is evicted when a fourth arrives so the user always sees the
+//     freshest message.
+//   - Auto-dismiss: 3000ms normal, 5000ms for errors.
+//   - Slide-in from the right on entry, fade on exit.
+
+const TOAST_MAX = 3;
+const TOAST_TTL_NORMAL = 3000;
+const TOAST_TTL_ERROR = 5000;
+
+let toastStackEl = null;
+const liveToasts = []; // newest at index 0
+
+function ensureToastStack() {
+    if (toastStackEl && document.body.contains(toastStackEl)) return toastStackEl;
+    toastStackEl = document.createElement("div");
+    toastStackEl.className = "smsys-toast-stack";
+    toastStackEl.setAttribute("role", "region");
+    toastStackEl.setAttribute("aria-label", "Notifications");
+    document.body.appendChild(toastStackEl);
+    return toastStackEl;
+}
+
+function toastIconSvg(type) {
+    const NS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("class", "smsys-toast-icon");
+    svg.setAttribute("viewBox", "0 0 16 16");
+    svg.setAttribute("width", "14");
+    svg.setAttribute("height", "14");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("focusable", "false");
+    const path = document.createElementNS(NS, "path");
+    path.setAttribute("stroke", "currentColor");
+    path.setAttribute("stroke-width", "2");
+    path.setAttribute("stroke-linecap", "round");
+    path.setAttribute("stroke-linejoin", "round");
+    path.setAttribute("fill", "none");
+    if (type === "success") {
+        path.setAttribute("d", "M3 8.5l3 3 7-7");
+    } else if (type === "error") {
+        path.setAttribute("d", "M4 4l8 8M12 4l-8 8");
+    } else {
+        // info — vertical line + dot
+        path.setAttribute("d", "M8 7v5M8 4.25v.5");
+    }
+    svg.appendChild(path);
+    return svg;
+}
+
+function dismissToast(entry) {
+    if (entry.dismissed) return;
+    entry.dismissed = true;
+    clearTimeout(entry.timer);
+    entry.el.classList.add("is-leaving");
+    const remove = () => {
+        entry.el.removeEventListener("transitionend", remove);
+        entry.el.remove();
+        const i = liveToasts.indexOf(entry);
+        if (i >= 0) liveToasts.splice(i, 1);
+    };
+    entry.el.addEventListener("transitionend", remove);
+    // Safety net in case transitionend never fires.
+    setTimeout(remove, 400);
+}
 
 export function toast(message, opts = {}) {
-    if (!toastEl) {
-        toastEl = document.createElement("div");
-        toastEl.className = "smsys-toast";
-        document.body.appendChild(toastEl);
+    const type = opts.type || (opts.error ? "error" : "info");
+    const ttl = type === "error" ? TOAST_TTL_ERROR : TOAST_TTL_NORMAL;
+    const stack = ensureToastStack();
+
+    const el = document.createElement("div");
+    el.className = `smsys-toast smsys-toast--${type}`;
+    el.setAttribute("role", type === "error" ? "alert" : "status");
+    el.appendChild(toastIconSvg(type));
+    const msg = document.createElement("span");
+    msg.className = "smsys-toast-msg";
+    msg.textContent = message;
+    el.appendChild(msg);
+
+    // Insert newest on top so the stack reads chronologically downward.
+    stack.insertBefore(el, stack.firstChild);
+    const entry = { el, timer: null, dismissed: false };
+    liveToasts.unshift(entry);
+
+    // Cap visible toasts at 3 by evicting the oldest.
+    while (liveToasts.length > TOAST_MAX) {
+        dismissToast(liveToasts[liveToasts.length - 1]);
     }
-    toastEl.textContent = message;
-    toastEl.style.color = opts.error ? "#fff" : "";
-    toastEl.style.background = opts.error
-        ? "var(--smsys-danger)"
-        : "var(--smsys-fg)";
-    toastEl.classList.add("is-visible");
-    if (toastTimer) clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => {
-        toastEl.classList.remove("is-visible");
-    }, 2200);
+
+    // Force layout so the entry animation actually plays.
+    void el.offsetWidth;
+    el.classList.add("is-visible");
+
+    entry.timer = setTimeout(() => dismissToast(entry), ttl);
+    el.addEventListener("click", () => dismissToast(entry));
+    return entry;
 }

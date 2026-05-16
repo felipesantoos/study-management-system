@@ -1,6 +1,7 @@
 import { h, clear } from "../lib/dom.js";
 import { invoke, toast } from "../lib/bridge.js";
 import { openStatusPicker, statusLabel } from "../lib/status-picker.js";
+import { emptyState, EMPTY_ICONS } from "../lib/empty-state.js";
 
 // Inline SVG chevron used as the expand/collapse indicator. Rotates 90° via
 // CSS when the .is-open class is set. Right-pointing in the closed state so
@@ -375,9 +376,12 @@ export async function render(container) {
 
         clear(treeEl);
         if (!disciplines.length) {
-            treeEl.appendChild(
-                h(".smsys-empty", "No disciplines yet. Click + New Discipline above.")
-            );
+            treeEl.appendChild(emptyState({
+                icon: EMPTY_ICONS.folder,
+                title: "No disciplines yet",
+                sub: "Group your notes by subject area to track progress and find what to study next.",
+                cta: { label: "+ Create first discipline", onClick: onNewDiscipline },
+            }));
             return;
         }
 
@@ -552,7 +556,7 @@ export async function render(container) {
                 async onConfirm(name) {
                     try {
                         await invoke("disciplines.create", { name });
-                        toast("Discipline created.");
+                        toast("Discipline created.", { type: "success" });
                         await refresh();
                     } catch (e) {
                         toast(e.message, { error: true });
@@ -1006,7 +1010,7 @@ function onAddSubject(d, childrenEl, refreshAll) {
             async onConfirm(name) {
                 try {
                     await invoke("subjects.create", { discipline_id: d.id, name });
-                    toast("Subject created.");
+                    toast("Subject created.", { type: "success" });
                     await loadSubjects(d.id, childrenEl, refreshAll);
                 } catch (e) {
                     toast(e.message, { error: true });
@@ -1025,7 +1029,7 @@ function onAddTopic(s, childrenEl, refreshAll) {
             async onConfirm(name) {
                 try {
                     await invoke("topics.create", { subject_id: s.id, name });
-                    toast("Topic created.");
+                    toast("Topic created.", { type: "success" });
                     await loadTopics(s.id, childrenEl, refreshAll);
                 } catch (e) {
                     toast(e.message, { error: true });
@@ -1046,7 +1050,7 @@ function onRenameDiscipline(d, anchorEl, refreshAll) {
                 if (name === d.name) return;
                 try {
                     await invoke("disciplines.rename", { id: d.id, name });
-                    toast("Renamed.");
+                    toast("Renamed.", { type: "success" });
                     await refreshAll();
                 } catch (e) {
                     toast(e.message, { error: true });
@@ -1065,7 +1069,7 @@ function onDeleteDiscipline(d, anchorEl, refreshAll) {
             async onConfirm() {
                 try {
                     await invoke("disciplines.delete", { id: d.id });
-                    toast("Deleted.");
+                    toast("Deleted.", { type: "success" });
                     await refreshAll();
                 } catch (e) {
                     toast(e.message, { error: true });
@@ -1086,7 +1090,7 @@ function onRenameSubject(s, anchorEl, refreshAll) {
                 if (name === s.name) return;
                 try {
                     await invoke("subjects.rename", { id: s.id, name });
-                    toast("Renamed.");
+                    toast("Renamed.", { type: "success" });
                     await refreshAll();
                 } catch (e) {
                     toast(e.message, { error: true });
@@ -1105,7 +1109,7 @@ function onDeleteSubject(s, anchorEl, refreshAll) {
             async onConfirm() {
                 try {
                     await invoke("subjects.delete", { id: s.id });
-                    toast("Deleted.");
+                    toast("Deleted.", { type: "success" });
                     await refreshAll();
                 } catch (e) {
                     toast(e.message, { error: true });
@@ -1126,7 +1130,7 @@ function onRenameTopic(t, anchorEl, refreshAll) {
                 if (name === t.name) return;
                 try {
                     await invoke("topics.rename", { id: t.id, name });
-                    toast("Renamed.");
+                    toast("Renamed.", { type: "success" });
                     await refreshAll();
                 } catch (e) {
                     toast(e.message, { error: true });
@@ -1145,7 +1149,7 @@ function onDeleteTopic(t, anchorEl, refreshAll) {
             async onConfirm() {
                 try {
                     await invoke("topics.delete", { id: t.id });
-                    toast("Deleted.");
+                    toast("Deleted.", { type: "success" });
                     await refreshAll();
                 } catch (e) {
                     toast(e.message, { error: true });
@@ -1260,7 +1264,7 @@ async function onMoveAllNotes(sourceKind, source, refreshAll) {
                     target_kind: kind,
                     target_id: id,
                 });
-                toast(`Moved ${moved} note${moved === 1 ? "" : "s"}.`);
+                toast(`Moved ${moved} note${moved === 1 ? "" : "s"}.`, { type: "success" });
                 await refreshAll();
             } catch (e) {
                 toast(e.message, { error: true });

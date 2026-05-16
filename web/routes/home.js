@@ -1,5 +1,6 @@
 import { h, clear } from "../lib/dom.js";
 import { invoke, toast } from "../lib/bridge.js";
+import { emptyState, EMPTY_ICONS } from "../lib/empty-state.js";
 
 // ---- Greeting --------------------------------------------------------------
 
@@ -300,9 +301,11 @@ export async function render(container) {
         clear(dueList);
         topSubject = null;
         if (!dueSubjects || dueSubjects.length === 0) {
-            dueList.appendChild(
-                h(".smsys-empty", "No cards due right now — all caught up!")
-            );
+            dueList.appendChild(emptyState({
+                icon: EMPTY_ICONS.check,
+                title: "You're all caught up!",
+                sub: "No cards due right now. Come back later or open a discipline to study ahead.",
+            }));
             startBtn.disabled = true;
         } else {
             topSubject = dueSubjects[0];

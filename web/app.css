@@ -405,6 +405,16 @@
     border-color: transparent;
     color: var(--smsys-fg);
 }
+.smsys-tree-action:focus-visible {
+    outline: 2px solid var(--smsys-accent);
+    outline-offset: 2px;
+    /* Row hover gates visibility on .smsys-tree-actions; expose focused action
+       even when the row isn't hovered, so keyboard users can see the target. */
+    opacity: 1;
+}
+/* Keep the parent .smsys-tree-actions visible while any descendant is focused
+   so the focused action's outline doesn't appear over an invisible button. */
+.smsys-tree-actions:focus-within { opacity: 1; }
 
 .smsys-tree-action.smsys-tree-action--study { color: var(--smsys-accent); }
 .smsys-tree-action.smsys-tree-action--study:hover {
@@ -443,6 +453,50 @@
     font-style: italic;
 }
 
+/* ----- illustrated empty states (FDA-716) -----
+ * Used in place of plain italic "(empty)" text on top-level surfaces where
+ * the user should land on a clear next-step prompt: Disciplines list,
+ * dashboard due list, unassigned notes. The icon uses currentColor so it
+ * inherits the same muted tone as the body copy and stays theme-correct. */
+.smsys-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--smsys-space-2);
+    padding: var(--smsys-space-8) var(--smsys-space-4);
+    text-align: center;
+    color: var(--smsys-muted);
+    font-style: normal;
+}
+
+.smsys-empty-state-icon {
+    width: 80px;
+    height: 80px;
+    color: var(--smsys-muted);
+    opacity: 0.7;
+    margin-bottom: var(--smsys-space-1);
+}
+
+.smsys-empty-state-title {
+    color: var(--smsys-fg);
+    font-size: var(--smsys-text-lg);
+    font-weight: var(--smsys-weight-semibold);
+    margin: 0;
+}
+
+.smsys-empty-state-sub {
+    color: var(--smsys-muted);
+    font-size: var(--smsys-text-base);
+    margin: 0;
+    max-width: 360px;
+    line-height: var(--smsys-leading-normal);
+}
+
+.smsys-empty-state-cta {
+    margin-top: var(--smsys-space-3);
+}
+
 /* ----- skeleton loader ----- */
 @keyframes smsys-shimmer {
     0%   { background-position: -200% 0; }
@@ -471,22 +525,75 @@
     margin-bottom: var(--smsys-space-3);
 }
 
-/* ----- toasts (lightweight) ----- */
-.smsys-toast {
+/* ----- toast stack (FDA-716) -----
+ * Top-right column. Up to 3 visible at once; bridge.js evicts the oldest
+ * when a fourth arrives. Each toast slides in from the right and fades on
+ * exit; click anywhere on a toast to dismiss early.
+ *
+ * Icon prefix colours:
+ *   success → --smsys-stat-new (green)
+ *   error   → --smsys-danger   (red)
+ *   info    → --smsys-accent   (brand) */
+.smsys-toast-stack {
     position: fixed;
-    bottom: var(--smsys-space-6);
-    left: 50%;
-    transform: translateX(-50%);
-    background: var(--smsys-fg);
-    color: var(--smsys-bg);
-    padding: var(--smsys-space-2) var(--smsys-space-4);
-    border-radius: var(--smsys-radius-sm);
-    z-index: 1000;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity var(--smsys-duration-fast) var(--smsys-ease);
+    top: var(--smsys-space-4);
+    right: var(--smsys-space-4);
+    z-index: 1100;
+    display: flex;
+    flex-direction: column;
+    gap: var(--smsys-space-2);
+    pointer-events: none;  /* individual toasts opt back in */
+    max-width: 360px;
 }
-.smsys-toast.is-visible { opacity: 0.92; }
+
+.smsys-toast {
+    pointer-events: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--smsys-space-2);
+    padding: var(--smsys-space-2) var(--smsys-space-3);
+    background: var(--smsys-bg);
+    color: var(--smsys-fg);
+    border: 1px solid var(--smsys-border);
+    border-left-width: 4px;
+    border-radius: var(--smsys-radius-md);
+    box-shadow: var(--smsys-shadow-md);
+    font-size: var(--smsys-text-sm);
+    cursor: pointer;
+    /* Entry: slide in from the right. The is-visible class lifts opacity
+       and clears the translate; is-leaving runs the exit. */
+    opacity: 0;
+    transform: translateX(16px);
+    transition: opacity var(--smsys-duration-fast) var(--smsys-ease),
+                transform var(--smsys-duration-fast) var(--smsys-ease);
+}
+.smsys-toast.is-visible {
+    opacity: 1;
+    transform: translateX(0);
+}
+.smsys-toast.is-leaving {
+    opacity: 0;
+    transform: translateX(16px);
+}
+
+.smsys-toast-icon { flex-shrink: 0; }
+.smsys-toast-msg  { line-height: var(--smsys-leading-normal); }
+
+.smsys-toast--success {
+    border-left-color: var(--smsys-stat-new);
+    color: var(--smsys-fg);
+}
+.smsys-toast--success .smsys-toast-icon { color: var(--smsys-stat-new); }
+
+.smsys-toast--error {
+    border-left-color: var(--smsys-danger);
+}
+.smsys-toast--error .smsys-toast-icon { color: var(--smsys-danger); }
+
+.smsys-toast--info {
+    border-left-color: var(--smsys-accent);
+}
+.smsys-toast--info .smsys-toast-icon { color: var(--smsys-accent); }
 
 /* ----- inline forms / confirms (replaces window.prompt / window.confirm) ----- */
 .smsys-inline-form,
@@ -497,6 +604,15 @@
     padding: var(--smsys-space-2) var(--smsys-space-3);
     background: var(--smsys-hover);
     border-top: 1px solid var(--smsys-border);
+    /* Entry animation (FDA-716): fade + slide-down. Runs once on appearance
+       so create/rename/delete affordances feel attached to their anchor row
+       instead of popping in abruptly. */
+    animation: smsys-inline-slide-in var(--smsys-duration-fast) var(--smsys-ease) both;
+}
+
+@keyframes smsys-inline-slide-in {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0);     }
 }
 
 .smsys-tree > .smsys-inline-form {
@@ -517,6 +633,11 @@
     font: inherit;
     font-size: var(--smsys-text-base);
     outline: none;
+}
+.smsys-inline-input:focus-visible {
+    /* Border is already accent-coloured by default; on focus reinforce with
+       the standard focus-ring glow so users see explicit focus state. */
+    box-shadow: 0 0 0 2px var(--smsys-focus-ring-bg);
 }
 
 .smsys-inline-confirm-msg {
@@ -580,6 +701,11 @@
     border-radius: var(--smsys-radius-sm);
     font: inherit;
     font-size: var(--smsys-text-base);
+}
+.smsys-modal-select:focus-visible {
+    outline: none;
+    border-color: var(--smsys-accent);
+    box-shadow: 0 0 0 2px var(--smsys-focus-ring-bg);
 }
 
 .smsys-modal-actions {
