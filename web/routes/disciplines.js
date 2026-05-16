@@ -137,6 +137,11 @@ async function loadSubjects(disciplineId, container, refreshAll) {
                     "show notes"
                 ),
                 h("button.smsys-tree-action",
+                    { title: "Move all notes to another subject",
+                      onClick: () => onMoveAllNotes(s, refreshAll) },
+                    "move all"
+                ),
+                h("button.smsys-tree-action",
                     { title: "Rename",
                       onClick: () => onRenameSubject(s, row, refreshAll) },
                     "rename"
@@ -264,6 +269,47 @@ async function onShowNotes(s) {
     }
 }
 
+async function onMoveAllNotes(source, refreshAll) {
+    let noteIds;
+    try {
+        noteIds = await invoke("subjects.note_ids", { id: source.id });
+    } catch (e) {
+        toast(e.message, { error: true });
+        return;
+    }
+    if (!noteIds.length) {
+        toast("No notes to move from this subject.");
+        return;
+    }
+
+    let disciplines;
+    try {
+        disciplines = await invoke("disciplines.list");
+    } catch (e) {
+        toast(e.message, { error: true });
+        return;
+    }
+
+    showSubjectPickerModal({
+        title: "Move all notes",
+        statusText: `Moving ${noteIds.length} note${noteIds.length === 1 ? "" : "s"} from "${source.name}".`,
+        disciplines,
+        excludeSubjectId: source.id,
+        async onConfirm(targetSubjectId) {
+            try {
+                const moved = await invoke("notes.bulk_assign", {
+                    note_ids: noteIds,
+                    subject_id: targetSubjectId,
+                });
+                toast(`Moved ${moved} note${moved === 1 ? "" : "s"}.`);
+                await refreshAll();
+            } catch (e) {
+                toast(e.message, { error: true });
+            }
+        },
+    });
+}
+
 function dismissActiveInline() {
     document.querySelectorAll(".smsys-inline-form, .smsys-inline-confirm")
         .forEach(el => el.remove());
@@ -316,4 +362,137 @@ function showInlineConfirm(insert, { message, onConfirm, onCancel }) {
     );
 
     insert(widget);
+}
+
+function showSubjectPickerModal({
+    title,
+    statusText,
+    disciplines,
+    excludeSubjectId = null,
+    onConfirm,
+    onCancel,
+}) {
+    let subjectsCache = new Map(); // discipline_id -> [subjects]
+    let chosenSubjectId = null;
+
+    const discSelect = h("select.smsys-modal-select",
+        h("option", { value: "" }, "— Select a discipline —"),
+        ...disciplines.map(d =>
+            h("option", { value: String(d.id) }, d.name)
+        )
+    );
+
+    const subjSelect = h("select.smsys-modal-select", { disabled: true },
+        h("option", { value: "" }, "— Select a subject —"),
+    );
+
+    const saveBtn = h("button.smsys-btn.smsys-btn-primary",
+        { disabled: true, onClick: commit },
+        "Move"
+    );
+
+    const overlay = h(".smsys-modal-overlay", { onClick: onOverlayClick },
+        h(".smsys-modal", { onClick: e => e.stopPropagation() },
+            h("h2.smsys-modal-title", title),
+            statusText ? h("p.smsys-modal-status", statusText) : null,
+            h(".smsys-modal-label", "Discipline"),
+            discSelect,
+            h(".smsys-modal-label", "Subject"),
+            subjSelect,
+            h(".smsys-modal-actions", null,
+                h("button.smsys-btn", { onClick: dismiss }, "Cancel"),
+                saveBtn,
+            ),
+        )
+    );
+
+    discSelect.addEventListener("change", onDisciplineChange);
+    subjSelect.addEventListener("change", onSubjectChange);
+    document.addEventListener("keydown", onKeydown);
+
+    document.body.appendChild(overlay);
+    discSelect.focus();
+
+    async function onDisciplineChange() {
+        chosenSubjectId = null;
+        saveBtn.disabled = true;
+        subjSelect.disabled = true;
+        clear(subjSelect);
+        subjSelect.appendChild(
+            h("option", { value: "" }, "Loading…")
+        );
+        const dId = discSelect.value;
+        if (!dId) {
+            clear(subjSelect);
+            subjSelect.appendChild(
+                h("option", { value: "" }, "— Select a subject —")
+            );
+            return;
+        }
+        let subjects = subjectsCache.get(dId);
+        if (!subjects) {
+            try {
+                subjects = await invoke("subjects.list", {
+                    discipline_id: Number(dId),
+                });
+            } catch (e) {
+                toast(e.message, { error: true });
+                clear(subjSelect);
+                subjSelect.appendChild(
+                    h("option", { value: "" }, "— Select a subject —")
+                );
+                return;
+            }
+            subjectsCache.set(dId, subjects);
+        }
+        clear(subjSelect);
+        subjSelect.appendChild(
+            h("option", { value: "" }, "— Select a subject —")
+        );
+        const eligible = subjects.filter(s => s.id !== excludeSubjectId);
+        if (!eligible.length) {
+            subjSelect.appendChild(
+                h("option", { value: "", disabled: true },
+                  "(no other subjects in this discipline)")
+            );
+        } else {
+            for (const s of eligible) {
+                subjSelect.appendChild(
+                    h("option", { value: String(s.id) }, s.name)
+                );
+            }
+        }
+        subjSelect.disabled = false;
+    }
+
+    function onSubjectChange() {
+        const v = subjSelect.value;
+        chosenSubjectId = v ? Number(v) : null;
+        saveBtn.disabled = chosenSubjectId == null;
+    }
+
+    function commit() {
+        if (chosenSubjectId == null) return;
+        teardown();
+        onConfirm(chosenSubjectId);
+    }
+
+    function dismiss() {
+        teardown();
+        if (onCancel) onCancel();
+    }
+
+    function onOverlayClick() {
+        dismiss();
+    }
+
+    function onKeydown(e) {
+        if (e.key === "Escape") { e.preventDefault(); dismiss(); }
+        if (e.key === "Enter" && !saveBtn.disabled) { e.preventDefault(); commit(); }
+    }
+
+    function teardown() {
+        document.removeEventListener("keydown", onKeydown);
+        overlay.remove();
+    }
 }

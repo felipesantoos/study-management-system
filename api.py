@@ -119,6 +119,15 @@ def notes_assign(note_id: int, subject_id: int | None) -> None:
     )
 
 
+@register("notes.bulk_assign")
+def notes_bulk_assign(note_ids: list[int], subject_id: int | None) -> int:
+    ids = [int(n) for n in note_ids]
+    db().bulk_assign(
+        ids, int(subject_id) if subject_id is not None else None
+    )
+    return len(ids)
+
+
 @register("notes.get_subject")
 def notes_get_subject(note_id: int) -> dict[str, Any] | None:
     row = db().get_note_subject(int(note_id))

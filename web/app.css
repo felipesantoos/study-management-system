@@ -294,3 +294,67 @@
     color: #fff;
 }
 .smsys-btn-danger-solid:hover { filter: brightness(1.1); }
+
+/* ----- modal ----- */
+.smsys-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 900;
+}
+
+.smsys-modal {
+    background: var(--smsys-bg);
+    color: var(--smsys-fg);
+    border: 1px solid var(--smsys-border);
+    border-radius: 8px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+    width: 420px;
+    max-width: calc(100vw - 32px);
+    padding: 20px 20px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.smsys-modal-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0;
+}
+
+.smsys-modal-status {
+    color: var(--smsys-muted);
+    font-size: 13px;
+    margin: 0;
+}
+
+.smsys-modal-label {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--smsys-muted);
+    margin-top: 4px;
+}
+
+.smsys-modal-select {
+    width: 100%;
+    padding: 6px 8px;
+    background: var(--smsys-bg);
+    color: var(--smsys-fg);
+    border: 1px solid var(--smsys-border);
+    border-radius: 4px;
+    font: inherit;
+    font-size: 13px;
+}
+
+.smsys-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    margin-top: 8px;
+}
