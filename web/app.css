@@ -131,7 +131,10 @@
     border-color: var(--smsys-accent);
     color: var(--smsys-accent-fg);
 }
-.smsys-btn-primary:hover { filter: brightness(1.1); }
+.smsys-btn-primary:hover {
+    background: var(--smsys-accent);
+    filter: brightness(1.1);
+}
 
 .smsys-btn-danger { color: var(--smsys-danger); }
 
