@@ -44,14 +44,44 @@ class SubjectsDB:
             """
         )
         self.con.commit()
-        cols = {row[1] for row in self.con.execute("PRAGMA table_info(disciplines)")}
-        if "color" not in cols:
+        disc_cols = {row[1] for row in self.con.execute("PRAGMA table_info(disciplines)")}
+        if "color" not in disc_cols:
             self.con.execute("ALTER TABLE disciplines ADD COLUMN color TEXT")
-            self.con.commit()
+        if "position" not in disc_cols:
+            self.con.execute(
+                "ALTER TABLE disciplines ADD COLUMN position INTEGER NOT NULL DEFAULT 0"
+            )
+            rows = self.con.execute(
+                "SELECT id FROM disciplines ORDER BY name"
+            ).fetchall()
+            for i, row in enumerate(rows):
+                self.con.execute(
+                    "UPDATE disciplines SET position = ? WHERE id = ?", (i, row[0])
+                )
+        subj_cols = {row[1] for row in self.con.execute("PRAGMA table_info(subjects)")}
+        if "position" not in subj_cols:
+            self.con.execute(
+                "ALTER TABLE subjects ADD COLUMN position INTEGER NOT NULL DEFAULT 0"
+            )
+            disc_ids = [
+                r[0] for r in self.con.execute("SELECT id FROM disciplines")
+            ]
+            for did in disc_ids:
+                rows = self.con.execute(
+                    "SELECT id FROM subjects WHERE discipline_id = ? ORDER BY name",
+                    (did,),
+                ).fetchall()
+                for i, row in enumerate(rows):
+                    self.con.execute(
+                        "UPDATE subjects SET position = ? WHERE id = ?", (i, row[0])
+                    )
+        self.con.commit()
 
     def list_disciplines(self) -> list[sqlite3.Row]:
         return list(
-            self.con.execute("SELECT id, name, color FROM disciplines ORDER BY name")
+            self.con.execute(
+                "SELECT id, name, color, position FROM disciplines ORDER BY position, name"
+            )
         )
 
     def set_discipline_color(self, discipline_id: int, color: str | None) -> None:
@@ -62,8 +92,12 @@ class SubjectsDB:
         self.con.commit()
 
     def add_discipline(self, name: str) -> int:
+        max_pos = self.con.execute(
+            "SELECT COALESCE(MAX(position), -1) FROM disciplines"
+        ).fetchone()[0]
         cur = self.con.execute(
-            "INSERT INTO disciplines (name) VALUES (?)", (name,)
+            "INSERT INTO disciplines (name, position) VALUES (?, ?)",
+            (name, max_pos + 1),
         )
         self.con.commit()
         return cur.lastrowid
@@ -81,25 +115,37 @@ class SubjectsDB:
         )
         self.con.commit()
 
+    def reorder_disciplines(self, ordered_ids: list[int]) -> None:
+        for i, discipline_id in enumerate(ordered_ids):
+            self.con.execute(
+                "UPDATE disciplines SET position = ? WHERE id = ?",
+                (i, discipline_id),
+            )
+        self.con.commit()
+
     def list_subjects(self, discipline_id: int) -> list[sqlite3.Row]:
         return list(
             self.con.execute(
                 """
-                SELECT s.id, s.name, COUNT(ns.note_id) AS note_count
+                SELECT s.id, s.name, s.position, COUNT(ns.note_id) AS note_count
                   FROM subjects s
                   LEFT JOIN note_subjects ns ON ns.subject_id = s.id
                  WHERE s.discipline_id = ?
-                 GROUP BY s.id, s.name
-                 ORDER BY s.name
+                 GROUP BY s.id, s.name, s.position
+                 ORDER BY s.position, s.name
                 """,
                 (discipline_id,),
             )
         )
 
     def add_subject(self, discipline_id: int, name: str) -> int:
+        max_pos = self.con.execute(
+            "SELECT COALESCE(MAX(position), -1) FROM subjects WHERE discipline_id = ?",
+            (discipline_id,),
+        ).fetchone()[0]
         cur = self.con.execute(
-            "INSERT INTO subjects (discipline_id, name) VALUES (?, ?)",
-            (discipline_id, name),
+            "INSERT INTO subjects (discipline_id, name, position) VALUES (?, ?, ?)",
+            (discipline_id, name, max_pos + 1),
         )
         self.con.commit()
         return cur.lastrowid
@@ -112,6 +158,14 @@ class SubjectsDB:
 
     def delete_subject(self, subject_id: int) -> None:
         self.con.execute("DELETE FROM subjects WHERE id = ?", (subject_id,))
+        self.con.commit()
+
+    def reorder_subjects(self, discipline_id: int, ordered_ids: list[int]) -> None:
+        for i, subject_id in enumerate(ordered_ids):
+            self.con.execute(
+                "UPDATE subjects SET position = ? WHERE id = ?",
+                (i, subject_id),
+            )
         self.con.commit()
 
     def assign_note(self, note_id: int, subject_id: int | None) -> None:

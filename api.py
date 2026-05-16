@@ -230,3 +230,28 @@ def anki_deck_browser() -> None:
     """Return Anki's main window to the deck browser."""
     assert mw is not None
     mw.moveToState("deckBrowser")
+
+
+@register("anki.study_subject")
+def anki_study_subject(subject_id: int) -> None:
+    """Create or rebuild a filtered deck for the subject and launch the reviewer."""
+    subject_id = int(subject_id)
+    row = db().get_subject(subject_id)
+    if row is None:
+        raise ValueError("Subject not found.")
+    note_ids = db().note_ids_for_subject(subject_id)
+    if not note_ids:
+        raise ValueError("No notes assigned to this subject.")
+
+    deck_name = f"Study: {row['discipline_name']} \u203a {row['subject_name']}"
+    search = "nid:" + ",".join(str(n) for n in note_ids)
+
+    assert mw is not None
+    did = mw.col.decks.newDyn(deck_name)
+    deck_dict = mw.col.decks.get(did)
+    deck_dict["terms"][0] = [search, 9999, 0]  # search, limit=all, order=random
+    deck_dict["resched"] = True
+    mw.col.decks.save(deck_dict)
+    mw.col.sched.rebuildDyn(did)
+    mw.col.decks.select(did)
+    mw.moveToState("review")

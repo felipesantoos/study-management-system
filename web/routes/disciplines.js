@@ -1,6 +1,129 @@
 import { h, clear } from "../lib/dom.js";
 import { invoke, safeInvoke, toast } from "../lib/bridge.js";
 
+let dragState = null; // { type: 'discipline'|'subject', id, disciplineId? }
+
+async function reorderDisciplines(container) {
+    const ids = [...container.querySelectorAll(".smsys-tree-discipline")]
+        .map(el => parseInt(el.dataset.id, 10));
+    try {
+        await invoke("disciplines.reorder", { ids });
+    } catch (e) {
+        toast(e.message, { error: true });
+    }
+}
+
+async function reorderSubjects(container, disciplineId) {
+    const ids = [...container.querySelectorAll(".smsys-tree-row.is-subject")]
+        .map(el => parseInt(el.dataset.id, 10));
+    try {
+        await invoke("subjects.reorder", { discipline_id: disciplineId, ids });
+    } catch (e) {
+        toast(e.message, { error: true });
+    }
+}
+
+function clearDragOver() {
+    document.querySelectorAll(".is-drag-over-before, .is-drag-over-after")
+        .forEach(el => el.classList.remove("is-drag-over-before", "is-drag-over-after"));
+}
+
+function wireDisciplineDrag(wrap, d) {
+    wrap.draggable = true;
+    wrap.dataset.id = d.id;
+
+    wrap.addEventListener("dragstart", e => {
+        dragState = { type: "discipline", id: d.id };
+        wrap.classList.add("is-dragging");
+        e.dataTransfer.effectAllowed = "move";
+        const header = wrap.querySelector(".smsys-tree-row.is-discipline");
+        if (header) e.dataTransfer.setDragImage(header, 16, header.offsetHeight / 2);
+    });
+
+    wrap.addEventListener("dragend", () => {
+        wrap.classList.remove("is-dragging");
+        clearDragOver();
+        dragState = null;
+    });
+
+    wrap.addEventListener("dragover", e => {
+        if (!dragState || dragState.type !== "discipline" || dragState.id === d.id) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        const rect = wrap.getBoundingClientRect();
+        const isAfter = e.clientY > rect.top + rect.height / 2;
+        wrap.classList.toggle("is-drag-over-before", !isAfter);
+        wrap.classList.toggle("is-drag-over-after", isAfter);
+    });
+
+    wrap.addEventListener("dragleave", e => {
+        if (!wrap.contains(e.relatedTarget)) {
+            wrap.classList.remove("is-drag-over-before", "is-drag-over-after");
+        }
+    });
+
+    wrap.addEventListener("drop", e => {
+        if (!dragState || dragState.type !== "discipline" || dragState.id === d.id) return;
+        e.preventDefault();
+        const container = wrap.parentElement;
+        const srcEl = container.querySelector(`.smsys-tree-discipline[data-id="${dragState.id}"]`);
+        if (!srcEl) return;
+        const isAfter = wrap.classList.contains("is-drag-over-after");
+        wrap.classList.remove("is-drag-over-before", "is-drag-over-after");
+        if (isAfter) { wrap.after(srcEl); } else { wrap.before(srcEl); }
+        reorderDisciplines(container);
+    });
+}
+
+function wireSubjectDrag(row, s, disciplineId, container) {
+    row.draggable = true;
+    row.dataset.id = s.id;
+
+    row.addEventListener("dragstart", e => {
+        dragState = { type: "subject", id: s.id, disciplineId };
+        row.classList.add("is-dragging");
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setDragImage(row, 16, row.offsetHeight / 2);
+    });
+
+    row.addEventListener("dragend", () => {
+        row.classList.remove("is-dragging");
+        clearDragOver();
+        dragState = null;
+    });
+
+    row.addEventListener("dragover", e => {
+        if (!dragState || dragState.type !== "subject"
+            || dragState.disciplineId !== disciplineId
+            || dragState.id === s.id) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        const rect = row.getBoundingClientRect();
+        const isAfter = e.clientY > rect.top + rect.height / 2;
+        row.classList.toggle("is-drag-over-before", !isAfter);
+        row.classList.toggle("is-drag-over-after", isAfter);
+    });
+
+    row.addEventListener("dragleave", e => {
+        if (!row.contains(e.relatedTarget)) {
+            row.classList.remove("is-drag-over-before", "is-drag-over-after");
+        }
+    });
+
+    row.addEventListener("drop", e => {
+        if (!dragState || dragState.type !== "subject"
+            || dragState.disciplineId !== disciplineId
+            || dragState.id === s.id) return;
+        e.preventDefault();
+        const srcEl = container.querySelector(`.smsys-tree-row.is-subject[data-id="${dragState.id}"]`);
+        if (!srcEl) return;
+        const isAfter = row.classList.contains("is-drag-over-after");
+        row.classList.remove("is-drag-over-before", "is-drag-over-after");
+        if (isAfter) { row.after(srcEl); } else { row.before(srcEl); }
+        reorderSubjects(container, disciplineId);
+    });
+}
+
 export async function render(container) {
     const page = h(".smsys-page");
     container.appendChild(page);
@@ -219,10 +342,43 @@ async function renderDiscipline(d, refreshAll) {
     );
     swatchBtn.appendChild(colorInput);
 
+    const dragHandle = h("span.smsys-drag-handle", { title: "Drag to reorder" }, "⠿");
+
     const headerRow = h(".smsys-tree-row.is-discipline", { onClick: toggleCollapse },
+        dragHandle,
         caretEl,
         h("span.smsys-tree-name", d.name),
         h(".smsys-tree-actions", null,
+            h("button.smsys-tree-action",
+                {
+                    title: "Move up",
+                    onClick: async (e) => {
+                        e.stopPropagation();
+                        const container = wrap.parentElement;
+                        const prev = wrap.previousElementSibling;
+                        if (prev?.classList.contains("smsys-tree-discipline")) {
+                            container.insertBefore(wrap, prev);
+                            await reorderDisciplines(container);
+                        }
+                    }
+                },
+                "↑"
+            ),
+            h("button.smsys-tree-action",
+                {
+                    title: "Move down",
+                    onClick: async (e) => {
+                        e.stopPropagation();
+                        const container = wrap.parentElement;
+                        const next = wrap.nextElementSibling;
+                        if (next?.classList.contains("smsys-tree-discipline")) {
+                            container.insertBefore(next, wrap);
+                            await reorderDisciplines(container);
+                        }
+                    }
+                },
+                "↓"
+            ),
             swatchBtn,
             h("button.smsys-tree-action",
                 { title: "Add subject", onClick: (e) => { e.stopPropagation(); onAddSubject(d, childrenEl, refreshAll); } },
@@ -241,6 +397,7 @@ async function renderDiscipline(d, refreshAll) {
 
     wrap.appendChild(headerRow);
     wrap.appendChild(childrenEl);
+    wireDisciplineDrag(wrap, d);
     await loadSubjects(d.id, childrenEl, refreshAll);
     return wrap;
 }
@@ -268,11 +425,41 @@ async function loadSubjects(disciplineId, container, refreshAll) {
         const statsEl = h(".smsys-subject-stats.is-loading", null, dueEl, newEl, lrnEl);
         statEls.set(s.id, { statsEl, dueEl, newEl, lrnEl });
 
+        const dragHandle = h("span.smsys-drag-handle", { title: "Drag to reorder" }, "⠿");
         const row = h(".smsys-tree-row.is-subject", null,
+            dragHandle,
             h("span.smsys-tree-name", s.name),
             h("span.smsys-badge", `${s.note_count} notes`),
             statsEl,
             h(".smsys-tree-actions", null,
+                h("button.smsys-tree-action",
+                    {
+                        title: "Move up",
+                        onClick: async (e) => {
+                            e.stopPropagation();
+                            const prev = row.previousElementSibling;
+                            if (prev?.classList.contains("is-subject")) {
+                                container.insertBefore(row, prev);
+                                await reorderSubjects(container, disciplineId);
+                            }
+                        }
+                    },
+                    "↑"
+                ),
+                h("button.smsys-tree-action",
+                    {
+                        title: "Move down",
+                        onClick: async (e) => {
+                            e.stopPropagation();
+                            const next = row.nextElementSibling;
+                            if (next?.classList.contains("is-subject")) {
+                                container.insertBefore(next, row);
+                                await reorderSubjects(container, disciplineId);
+                            }
+                        }
+                    },
+                    "↓"
+                ),
                 h("button.smsys-tree-action.smsys-tree-action--study",
                     { title: "Start a study session for this subject",
                       onClick: () => onStudySubject(s) },
@@ -300,6 +487,7 @@ async function loadSubjects(disciplineId, container, refreshAll) {
                 ),
             )
         );
+        wireSubjectDrag(row, s, disciplineId, container);
         container.appendChild(row);
     }
 
