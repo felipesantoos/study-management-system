@@ -56,6 +56,11 @@ export const EMPTY_ICONS = {
         "M26 30c0-3 2-5 5-5s5 2 5 5-2 4-4 5-2 2-2 4",
         "M30 44v.5",
     ]),
+    // Magnifying glass — filter / search returned no matches.
+    search: () => makeSvg([
+        "M28 14a14 14 0 100 28 14 14 0 000-28z",
+        "M38 38l12 12",
+    ]),
 };
 
 export function emptyState({ icon, title, sub, cta = null }) {

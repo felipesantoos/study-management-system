@@ -346,6 +346,12 @@ export async function render(container) {
     const treeEl = h(".smsys-tree");
     page.appendChild(treeEl);
 
+    // "No matches" empty state shown when an active filter (text query or
+    // status chip) hides every discipline. Tracked at this scope so applyFilter
+    // can mount/dismount it across calls; refresh() nulls it when treeEl is
+    // cleared so we don't hold onto a detached node.
+    let filterEmptyEl = null;
+
     // Tree-level dragover catch-all. Without this, when the cursor sits over
     // the source's own wrap (or its descendants, or any wrap that bails on
     // type/scope mismatch), no handler calls preventDefault and the browser
@@ -361,6 +367,7 @@ export async function render(container) {
 
     async function refresh() {
         clear(treeEl);
+        filterEmptyEl = null;
         treeEl.appendChild(h(".smsys-tree-skeleton"));
         treeEl.appendChild(h(".smsys-tree-skeleton"));
         let disciplines;
@@ -516,6 +523,60 @@ export async function render(container) {
                 restoreHighlight(dNameEl);
             }
         });
+
+        if (noFilters) {
+            removeFilterEmpty();
+            return;
+        }
+
+        // When there are zero disciplines the "No disciplines yet" empty state
+        // is already mounted by refresh(); don't stack a second one on top.
+        const allWraps = [...treeEl.querySelectorAll(":scope > .smsys-tree-discipline")];
+        if (!allWraps.length) {
+            removeFilterEmpty();
+            return;
+        }
+
+        const anyVisible = allWraps.some(el => el.style.display !== "none");
+        if (anyVisible) removeFilterEmpty();
+        else showFilterEmpty((raw || "").trim(), sFilter);
+    }
+
+    function showFilterEmpty(trimmedQuery, statusValue) {
+        if (filterEmptyEl) filterEmptyEl.remove();
+        const statusChip = STATUS_CHIPS.find(c => c.value === statusValue);
+        const parts = [];
+        if (trimmedQuery) parts.push(`“${trimmedQuery}”`);
+        if (statusChip && statusValue) parts.push(`status “${statusChip.label}”`);
+        const detail = parts.join(" and ");
+        filterEmptyEl = emptyState({
+            icon: EMPTY_ICONS.search,
+            title: "No matches",
+            sub: detail
+                ? `Nothing matched ${detail}. Try a different search or clear the filters.`
+                : "Nothing matched your filters. Try a different search or clear them.",
+            cta: { label: "Clear filters", onClick: clearAllFilters },
+        });
+        treeEl.appendChild(filterEmptyEl);
+    }
+
+    function removeFilterEmpty() {
+        if (!filterEmptyEl) return;
+        filterEmptyEl.remove();
+        filterEmptyEl = null;
+    }
+
+    function clearAllFilters() {
+        filterInput.value = "";
+        activeStatus = "";
+        for (const el of chipEls) {
+            const v = el.dataset.status === "all" ? "" : el.dataset.status;
+            const isActive = v === activeStatus;
+            el.classList.toggle("is-active", isActive);
+            el.setAttribute("aria-pressed", isActive ? "true" : "false");
+        }
+        applyFilter("");
+        filterInput.focus();
     }
 
     function highlight(el, rawText, query) {
