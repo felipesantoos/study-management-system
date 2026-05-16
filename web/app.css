@@ -254,8 +254,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-height: var(--smsys-space-8);
-    padding: var(--smsys-space-1) var(--smsys-space-3);
+    min-height: 28px;
+    padding: 3px var(--smsys-space-3);
     margin: 0 var(--smsys-space-1) 0 0;
     background: var(--smsys-bg);
     color: var(--smsys-fg);
@@ -814,8 +814,8 @@
 
 .smsys-hero-cta {
     flex-shrink: 0;
-    min-height: var(--smsys-space-10);
-    padding: var(--smsys-space-2) var(--smsys-space-5);
+    min-height: var(--smsys-space-8);
+    padding: var(--smsys-space-1) var(--smsys-space-4);
     font-size: var(--smsys-text-base);
     font-weight: var(--smsys-weight-semibold);
     box-shadow: var(--smsys-shadow-sm);
