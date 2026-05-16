@@ -409,20 +409,32 @@
     white-space: nowrap;
 }
 
-/* Meta wrapper groups the "x notes / y subjects / z topics" badges and the
-   stats pill so they sit at a consistent right-edge position across the
-   discipline, subject, and topic rows. flex-shrink: 0 keeps the meta intact
-   while the name absorbs the available space. Inner badges and the stats
-   pill carry their own trailing margins, so no extra gap is needed here. */
+/* Meta wrapper holds the "x notes / y subjects / z topics" badges + the
+   stats pill in a 3-column CSS grid with FIXED widths, so the notes badge,
+   the optional middle badge slot, and the stats pill each sit at the same
+   X position across discipline, subject, and topic rows — even when the
+   topic row has no middle badge (its middle cell simply stays empty).
+   The stats pill is explicitly placed in column 3 so the absent middle
+   badge doesn't shift it into column 2.
+
+   justify-items: end right-aligns each cell's content, and the per-row
+   badge / stats margins are reset to 0 so only the grid's column-gap
+   controls spacing. */
 .smsys-tree-meta {
-    display: flex;
+    display: grid;
+    grid-template-columns: 78px 100px 120px;
+    column-gap: var(--smsys-space-2);
     align-items: center;
+    justify-items: end;
     flex-shrink: 0;
     margin-left: auto;
+    margin-right: var(--smsys-space-2);
 }
-/* When meta is the last child of its row (e.g. before the actions reserve
-   takes over), the trailing margin of its final child becomes the gap to the
-   actions column. .smsys-badge and .smsys-subject-stats already supply 8px. */
+.smsys-tree-meta .smsys-badge { margin: 0; }
+.smsys-tree-meta .smsys-subject-stats {
+    margin: 0;
+    grid-column: 3;
+}
 
 .smsys-tree-actions {
     display: flex;
@@ -433,45 +445,57 @@
     /* Reserve a consistent width for the action column so the meta group above
        aligns vertically across discipline, subject, and topic rows even though
        the topic row carries one fewer button. Sized for 8 × 26px icon buttons
-       (12px icon + 12px padding + 2px reserved border) plus 7 × 4px gaps. */
+       (14px icon + 10px padding + 2px reserved border) plus 7 × 4px gaps. */
     min-width: 240px;
     opacity: 0;
     transition: opacity var(--smsys-duration-micro) var(--smsys-ease);
 }
 .smsys-tree-row:hover .smsys-tree-actions { opacity: 1; }
 
+/* Action buttons (FDA-728): no background, no border, no shadow — only the
+   per-icon color carries the signal. The !important suffix is necessary
+   because Anki's webview.css applies button-level background, border, and
+   box-shadow rules with the same specificity as a single class selector
+   (`body button:hover`, etc.) and would otherwise reintroduce the surfaces
+   the spec asks us to remove. The transparent 1px border is preserved so
+   Anki's `button:hover { border: 1px solid … }` rule cannot shift the row
+   height (Anki uses `box-sizing: content-box`). */
 .smsys-tree-action {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: transparent;
-    /* Anki's default webview.css applies `button:hover { border: 1px solid var(--shadow) }`
-     * globally, and `* { box-sizing: content-box }` means that border adds 2px to the
-     * button's height on hover. Inside .smsys-tree-row's flex layout that shifts the
-     * row height. Reserve a transparent 1px border so dimensions stay stable. */
-    border: 1px solid transparent;
+    background: transparent !important;
+    background-image: none !important;
+    border: 1px solid transparent !important;
+    box-shadow: none !important;
     color: var(--smsys-muted);
     cursor: pointer;
     font: inherit;
     font-size: var(--smsys-text-xs);
-    padding: 2px 6px;
+    padding: 2px 5px;
     border-radius: var(--smsys-radius-sm);
     white-space: nowrap;
+    outline: none;
     transition: color var(--smsys-duration-micro) var(--smsys-ease),
                 filter var(--smsys-duration-micro) var(--smsys-ease);
 }
-/* Backgrounds removed per FDA-728 — icon-only buttons signal intent through
-   their per-action color, and hover only brightens the icon. */
 .smsys-tree-action:hover {
-    background: transparent;
-    border-color: transparent;
-    filter: brightness(1.15);
+    background: transparent !important;
+    background-image: none !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+    filter: brightness(1.3);
+}
+.smsys-tree-action:active {
+    background: transparent !important;
+    box-shadow: none !important;
+    filter: brightness(0.85);
 }
 .smsys-tree-action:focus-visible {
-    outline: 2px solid var(--smsys-accent);
-    outline-offset: 2px;
     /* Row hover gates visibility on .smsys-tree-actions; expose focused action
        even when the row isn't hovered, so keyboard users can see the target. */
+    outline: 2px solid var(--smsys-accent) !important;
+    outline-offset: 2px;
     opacity: 1;
 }
 /* Keep the parent .smsys-tree-actions visible while any descendant is focused
@@ -1328,7 +1352,7 @@ mark.smsys-highlight {
     align-items: center;
     gap: 8px;
     width: 100%;
-    padding: 7px 10px;
+    padding: 9px;
     border: 1px solid transparent;
     background: transparent;
     border-radius: 6px;
@@ -1348,7 +1372,7 @@ mark.smsys-highlight {
 .smsys-status-option.is-current:hover,
 .smsys-status-option.is-current.is-focused { background: var(--smsys-picker-item-hover); }
 .smsys-status-option.is-current .smsys-status-option-label { color: var(--smsys-accent); }
-.smsys-status-option + .smsys-status-option { margin-top: 2px; }
+.smsys-status-option + .smsys-status-option { margin-top: 4px; }
 .smsys-status-option:focus-visible { outline: none; }
 
 .smsys-status-dot-sm {
