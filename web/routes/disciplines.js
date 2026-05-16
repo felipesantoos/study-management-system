@@ -22,16 +22,20 @@ export async function render(container) {
 
     async function refresh() {
         clear(treeEl);
+        treeEl.appendChild(h(".smsys-tree-skeleton"));
+        treeEl.appendChild(h(".smsys-tree-skeleton"));
         let disciplines;
         try {
             disciplines = await invoke("disciplines.list");
         } catch (e) {
+            clear(treeEl);
             treeEl.appendChild(
                 h(".smsys-empty", `Could not load disciplines: ${e.message}`)
             );
             return;
         }
 
+        clear(treeEl);
         if (!disciplines.length) {
             treeEl.appendChild(
                 h(".smsys-empty", "No disciplines yet. Click + New Discipline above.")

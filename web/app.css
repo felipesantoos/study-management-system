@@ -194,6 +194,27 @@
     font-style: italic;
 }
 
+/* ----- skeleton loader ----- */
+@keyframes smsys-shimmer {
+    0%   { background-position: -200% 0; }
+    100% { background-position:  200% 0; }
+}
+
+.smsys-tree-skeleton {
+    margin: 8px 0;
+    border: 1px solid var(--smsys-border);
+    border-radius: 6px;
+    height: 38px;
+    background: linear-gradient(
+        90deg,
+        var(--smsys-sidebar-bg) 25%,
+        var(--smsys-hover)      50%,
+        var(--smsys-sidebar-bg) 75%
+    );
+    background-size: 200% 100%;
+    animation: smsys-shimmer 1.2s ease-in-out infinite;
+}
+
 /* ----- toolbar within a page ----- */
 .smsys-page-actions {
     display: flex;
