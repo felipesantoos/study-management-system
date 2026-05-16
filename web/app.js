@@ -14,7 +14,7 @@ import * as unassignedRoute from "./routes/unassigned.js";
 
 const NAV = [
     { path: "/", label: "Home" },
-    { path: "/disciplines", label: "Disciplines & Subjects" },
+    { path: "/disciplines", label: "Disciplines & Topics" },
     { path: "/unassigned", label: "Unassigned Notes", badgeId: "smsys-unassigned-badge" },
 ];
 
@@ -67,9 +67,9 @@ function highlightActive(sidebar, path) {
 
 async function refreshUnassignedCount() {
     try {
-        const ids = await invoke("notes.unassigned_ids");
+        const count = await invoke("notes.unassigned_count");
         const badge = document.getElementById("smsys-unassigned-badge");
-        if (badge) badge.textContent = String(ids.length);
+        if (badge) badge.textContent = String(count);
     } catch (_) {
         // Badge stays empty if the call fails
     }

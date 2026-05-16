@@ -5,7 +5,7 @@ export async function render(container) {
     const page = h(".smsys-page");
     container.appendChild(page);
 
-    page.appendChild(h("h1.smsys-page-title", "Unassigned Notes"));
+    page.appendChild(h(".smsys-page-header", null, h("h1.smsys-page-title", "Unassigned Notes")));
 
     const statusEl = h("p", "Loading…");
     page.appendChild(statusEl);

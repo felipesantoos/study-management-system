@@ -9,11 +9,10 @@ function statTile(value, label) {
 }
 
 function statsPill(due, lrn, newCount) {
-    const total = due + lrn;
     return h(".smsys-subject-stats", null,
-        total  > 0 && h("span.smsys-stat.is-due", `${total} due`),
+        due      > 0 && h("span.smsys-stat.is-due", `${due} due`),
         newCount > 0 && h("span.smsys-stat.is-new", `${newCount} new`),
-        lrn  > 0 && h("span.smsys-stat.is-lrn", `${lrn} lrn`),
+        lrn      > 0 && h("span.smsys-stat.is-lrn", `${lrn} lrn`),
     );
 }
 
@@ -52,9 +51,12 @@ export async function render(container) {
     const page = h(".smsys-page");
     container.appendChild(page);
 
+    const refreshBtn = h("button.smsys-btn", { style: { marginLeft: "auto" } }, "↺ Refresh");
+
     page.appendChild(
         h(".smsys-page-header", null,
             h("h1.smsys-page-title", "Dashboard"),
+            refreshBtn,
         )
     );
 
@@ -78,32 +80,43 @@ export async function render(container) {
     );
     page.appendChild(dueList);
 
-    const [overview, dueSubjects] = await Promise.all([
-        invoke("stats.overview").catch(() => null),
-        invoke("stats.due_by_subject", { limit: 5 }).catch(() => []),
-    ]);
+    async function loadData() {
+        refreshBtn.disabled = true;
+        refreshBtn.textContent = "↺ Refreshing…";
 
-    // Populate stat grid
-    clear(statGrid);
-    if (overview) {
-        statGrid.appendChild(statTile(overview.disciplines, "Disciplines"));
-        statGrid.appendChild(statTile(overview.subjects, "Subjects"));
-        statGrid.appendChild(statTile(overview.topics ?? 0, "Topics"));
-        statGrid.appendChild(statTile(overview.assigned_notes, "Assigned notes"));
-        statGrid.appendChild(statTile(overview.unassigned_notes, "Unassigned notes"));
-    } else {
-        statGrid.appendChild(h(".smsys-empty", "Could not load stats."));
-    }
+        const [overview, dueSubjects] = await Promise.all([
+            invoke("stats.overview").catch(() => null),
+            invoke("stats.due_by_subject", { limit: 5 }).catch(() => []),
+        ]);
 
-    // Populate due list
-    clear(dueList);
-    if (!dueSubjects || dueSubjects.length === 0) {
-        dueList.appendChild(
-            h(".smsys-empty", "No cards due right now — all caught up!")
-        );
-    } else {
-        for (let i = 0; i < dueSubjects.length; i++) {
-            dueList.appendChild(dueRow(dueSubjects[i], i === 0));
+        // Populate stat grid
+        clear(statGrid);
+        if (overview) {
+            statGrid.appendChild(statTile(overview.disciplines, "Disciplines"));
+            statGrid.appendChild(statTile(overview.subjects, "Subjects"));
+            statGrid.appendChild(statTile(overview.topics ?? 0, "Topics"));
+            statGrid.appendChild(statTile(overview.assigned_notes, "Assigned notes"));
+            statGrid.appendChild(statTile(overview.unassigned_notes, "Unassigned notes"));
+        } else {
+            statGrid.appendChild(h(".smsys-empty", "Could not load stats."));
         }
+
+        // Populate due list
+        clear(dueList);
+        if (!dueSubjects || dueSubjects.length === 0) {
+            dueList.appendChild(
+                h(".smsys-empty", "No cards due right now — all caught up!")
+            );
+        } else {
+            for (let i = 0; i < dueSubjects.length; i++) {
+                dueList.appendChild(dueRow(dueSubjects[i], i === 0));
+            }
+        }
+
+        refreshBtn.disabled = false;
+        refreshBtn.textContent = "↺ Refresh";
     }
+
+    refreshBtn.onclick = loadData;
+    loadData();
 }
