@@ -429,12 +429,19 @@
     flex-shrink: 0;
     margin-left: auto;
     margin-right: var(--smsys-space-2);
+    /* Lock the grid container's width so flex-basis intrinsic sizing can't
+       collapse a row whose middle slot is an empty placeholder (topic rows /
+       disc-with-no-subjects). 78 + 100 + 120 + 2 × 8 (column-gap) = 314. */
+    width: 314px;
 }
 .smsys-tree-meta .smsys-badge { margin: 0; }
-.smsys-tree-meta .smsys-subject-stats {
-    margin: 0;
-    grid-column: 3;
-}
+/* Pin every meta child to its own column. With auto-flow alone the layout
+   was correct in theory, but explicit placement removes any ambiguity in
+   webview engines and guarantees the notes badge sits in column 1 on every
+   row type — including topic rows whose middle slot is an empty span. */
+.smsys-tree-meta .smsys-meta-notes    { grid-column: 1; }
+.smsys-tree-meta .smsys-meta-extra    { grid-column: 2; }
+.smsys-tree-meta .smsys-subject-stats { grid-column: 3; margin: 0; }
 
 .smsys-tree-actions {
     display: flex;
