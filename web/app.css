@@ -624,14 +624,84 @@
     margin: 0 0 var(--smsys-space-2);
 }
 
+.smsys-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--smsys-space-2);
+    margin: 0 0 var(--smsys-space-2);
+}
+.smsys-section-header .smsys-section-heading { margin: 0; }
+
+/* ----- hero (greeting + start-studying CTA) ----- */
+.smsys-hero {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--smsys-space-4);
+    padding: var(--smsys-space-5) var(--smsys-space-6);
+    margin-bottom: var(--smsys-space-6);
+    background: var(--smsys-sidebar-bg);
+    border: 1px solid var(--smsys-border);
+    border-radius: var(--smsys-radius-xl);
+    box-shadow: var(--smsys-shadow-sm);
+}
+
+.smsys-greeting {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--smsys-space-1);
+}
+
+.smsys-greeting-line {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: var(--smsys-space-3);
+}
+
+.smsys-greeting-text {
+    font-size: var(--smsys-text-2xl);
+    font-weight: var(--smsys-weight-bold);
+    line-height: var(--smsys-leading-tight);
+    margin: 0;
+}
+
+.smsys-greeting-date {
+    font-size: var(--smsys-text-sm);
+    color: var(--smsys-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.smsys-greeting-sub {
+    font-size: var(--smsys-text-base);
+    color: var(--smsys-fg);
+}
+
+.smsys-hero-cta {
+    flex-shrink: 0;
+    min-height: var(--smsys-space-10);
+    padding: var(--smsys-space-2) var(--smsys-space-5);
+    font-size: var(--smsys-text-base);
+    font-weight: var(--smsys-weight-semibold);
+    box-shadow: var(--smsys-shadow-sm);
+}
+.smsys-hero-cta:disabled {
+    box-shadow: none;
+}
+
+/* ----- stat tiles ----- */
 .smsys-stat-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: var(--smsys-space-2);
-    margin-bottom: var(--smsys-space-8);
+    gap: var(--smsys-space-3);
+    margin-bottom: var(--smsys-space-6);
 }
 
 .smsys-stat-tile {
+    position: relative;
     background: var(--smsys-sidebar-bg);
     border: 1px solid var(--smsys-border);
     border-radius: var(--smsys-radius-lg);
@@ -639,10 +709,23 @@
     display: flex;
     flex-direction: column;
     gap: var(--smsys-space-1);
+    overflow: hidden;
+    box-shadow: var(--smsys-shadow-sm);
+}
+
+/* 4px accent bar pinned to the top of every stat tile. Color is supplied
+   via the --smsys-stat-accent custom property set inline per tile. */
+.smsys-stat-tile-accent {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: var(--smsys-stat-accent, var(--smsys-accent));
 }
 
 .smsys-stat-tile.is-skeleton {
-    height: 68px;
+    height: 76px;
     background: linear-gradient(
         90deg,
         var(--smsys-sidebar-bg) 25%,
@@ -658,6 +741,7 @@
     font-weight: var(--smsys-weight-bold);
     line-height: var(--smsys-leading-tight);
     font-variant-numeric: tabular-nums;
+    margin-top: var(--smsys-space-1);
 }
 
 .smsys-stat-tile-label {
@@ -668,28 +752,79 @@
     color: var(--smsys-muted);
 }
 
+.smsys-stat-tile-sub {
+    font-size: var(--smsys-text-xs);
+    color: var(--smsys-muted);
+    margin-top: var(--smsys-space-1);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ----- study-status summary strip ----- */
+.smsys-status-section {
+    margin-bottom: var(--smsys-space-6);
+}
+.smsys-status-section:empty {
+    display: none;
+}
+
+.smsys-status-strip {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--smsys-space-3);
+    padding: var(--smsys-space-3) var(--smsys-space-4);
+    background: var(--smsys-sidebar-bg);
+    border: 1px solid var(--smsys-border);
+    border-radius: var(--smsys-radius-md);
+    font-size: var(--smsys-text-sm);
+}
+
+.smsys-status-strip-item {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--smsys-space-2);
+    font-variant-numeric: tabular-nums;
+}
+
+.smsys-status-strip-count {
+    font-weight: var(--smsys-weight-bold);
+}
+
+.smsys-status-strip-label {
+    color: var(--smsys-muted);
+}
+
+.smsys-status-strip-sep {
+    color: var(--smsys-muted);
+    padding-left: var(--smsys-space-2);
+    user-select: none;
+}
+
+/* ----- due list ----- */
 .smsys-due-list {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: var(--smsys-space-2);
     margin-bottom: var(--smsys-space-4);
 }
 
 .smsys-due-row {
     display: flex;
     align-items: center;
-    gap: var(--smsys-space-2);
-    padding: var(--smsys-space-2) var(--smsys-space-3);
+    gap: var(--smsys-space-3);
+    padding: var(--smsys-space-3) var(--smsys-space-4);
     background: var(--smsys-sidebar-bg);
     border: 1px solid var(--smsys-border);
     border-radius: var(--smsys-radius-md);
-    transition: background var(--smsys-duration-fast) var(--smsys-ease);
+    transition: background var(--smsys-duration-fast) var(--smsys-ease),
+                border-color var(--smsys-duration-fast) var(--smsys-ease);
 }
 
 .smsys-due-row:hover { background: var(--smsys-hover); }
 
 .smsys-due-row.is-top {
     border-color: var(--smsys-accent);
+    box-shadow: 0 0 0 1px var(--smsys-accent);
 }
 
 .smsys-due-row.is-skeleton {
@@ -704,12 +839,14 @@
     animation: smsys-shimmer 1.2s ease-in-out infinite;
 }
 
-.smsys-due-accent {
-    width: 3px;
-    height: 28px;
-    border-radius: 2px;
-    background: var(--smsys-muted);
+/* Discipline color dot — colored circle in front of each due row's subject
+   name. Inline style sets background to the discipline's hex color. */
+.smsys-due-disc-dot {
     flex-shrink: 0;
+    width: 10px;
+    height: 10px;
+    border-radius: var(--smsys-radius-full);
+    border: 1px solid var(--smsys-color-dot-border);
 }
 
 .smsys-due-names {
@@ -733,6 +870,32 @@
     text-overflow: ellipsis;
     margin-top: 1px;
 }
+
+/* Icon + number stats on each due row. Color comes from the existing
+   --smsys-stat-* tokens to stay consistent with the per-subject pills. */
+.smsys-due-stats {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--smsys-space-3);
+    font-size: var(--smsys-text-sm);
+    font-weight: var(--smsys-weight-semibold);
+    font-variant-numeric: tabular-nums;
+}
+
+.smsys-due-stat {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 2px;
+}
+
+.smsys-due-stat-icon {
+    font-size: var(--smsys-text-base);
+    line-height: 1;
+}
+
+.smsys-due-stat.is-due { color: var(--smsys-accent); }
+.smsys-due-stat.is-new { color: var(--smsys-stat-new); }
+.smsys-due-stat.is-lrn { color: var(--smsys-stat-lrn); }
 
 /* ----- drag-and-drop reordering ----- */
 .smsys-drag-handle {

@@ -396,13 +396,52 @@ def stats_overview() -> dict[str, Any]:
         "SELECT COUNT(*) FROM note_assignments"
     ).fetchone()[0]
     total_notes = len(mw.col.find_notes(""))
+
+    # Cards due today across the whole collection (review + learning + new).
+    # Matches the per-subject classification used by stats.due_by_subject.
+    today = mw.col.sched.today
+    due_cards = mw.col.db.scalar(
+        "SELECT COUNT(*) FROM cards "
+        "WHERE queue = 2 AND due <= ?",
+        today,
+    ) or 0
+    lrn_cards = mw.col.db.scalar(
+        "SELECT COUNT(*) FROM cards "
+        "WHERE queue = 1 OR (queue = 3 AND due <= ?)",
+        today,
+    ) or 0
+    new_cards = mw.col.db.scalar(
+        "SELECT COUNT(*) FROM cards WHERE queue = 0"
+    ) or 0
+
     return {
         "disciplines": int(discipline_count),
         "subjects": int(subject_count),
         "topics": int(topic_count),
         "assigned_notes": int(assigned_count),
         "unassigned_notes": max(0, int(total_notes) - int(assigned_count)),
+        "cards_due": int(due_cards),
+        "cards_lrn": int(lrn_cards),
+        "cards_new": int(new_cards),
     }
+
+
+@register("stats.status_summary")
+def stats_status_summary() -> dict[str, int]:
+    """Return subject counts grouped by study_status.
+
+    Returned dict always contains every known status key — zero counts
+    are represented explicitly so the client can decide what to render.
+    """
+    counts: dict[str, int] = {status: 0 for status in STUDY_STATUSES}
+    rows = db().con.execute(
+        "SELECT study_status, COUNT(*) AS n FROM subjects GROUP BY study_status"
+    ).fetchall()
+    for row in rows:
+        status = row["study_status"]
+        if status in counts:
+            counts[status] = int(row["n"])
+    return counts
 
 
 @register("stats.due_by_subject")
