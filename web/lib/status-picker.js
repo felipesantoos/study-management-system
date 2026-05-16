@@ -126,7 +126,13 @@ export function openStatusPicker(triggerEl, nodeId, nodeType) {
                 triggerEl.setAttribute("title", statusLabel(newStatus));
                 // Closed-state CSS targets the row wrapper, not the dot.
                 const row = triggerEl.closest(".smsys-tree-row");
-                if (row) row.dataset.status = newStatus;
+                if (row) {
+                    row.dataset.status = newStatus;
+                    row.dispatchEvent(new CustomEvent("smsys-status-changed", {
+                        bubbles: true,
+                        detail: { nodeId, nodeType, oldStatus: currentStatus, newStatus },
+                    }));
+                }
             } catch (e) {
                 toast(e.message, { error: true });
                 closeStatusPicker();

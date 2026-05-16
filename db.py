@@ -181,7 +181,11 @@ class SubjectsDB:
                           JOIN subjects s ON s.id = t.subject_id
                          WHERE s.discipline_id = d.id) AS note_count,
                        (SELECT COUNT(*) FROM subjects
-                          WHERE discipline_id = d.id) AS subject_count
+                          WHERE discipline_id = d.id) AS subject_count,
+                       (SELECT COUNT(*) FROM subjects
+                          WHERE discipline_id = d.id AND study_status = 'done') AS done_count,
+                       (SELECT COUNT(*) FROM subjects
+                          WHERE discipline_id = d.id AND study_status = 'archived') AS archived_count
                   FROM disciplines d
                  ORDER BY d.position, d.name
                 """
@@ -250,7 +254,11 @@ class SubjectsDB:
                           JOIN topics t ON t.id = na.topic_id
                           WHERE t.subject_id = s.id) AS note_count,
                        (SELECT COUNT(*) FROM topics
-                          WHERE subject_id = s.id) AS topic_count
+                          WHERE subject_id = s.id) AS topic_count,
+                       (SELECT COUNT(*) FROM topics
+                          WHERE subject_id = s.id AND study_status = 'done') AS done_count,
+                       (SELECT COUNT(*) FROM topics
+                          WHERE subject_id = s.id AND study_status = 'archived') AS archived_count
                   FROM subjects s
                  WHERE s.discipline_id = ?
                  ORDER BY s.position, s.name

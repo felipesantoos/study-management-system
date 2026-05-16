@@ -131,6 +131,31 @@ function makeStatusDot(node, nodeType) {
     });
 }
 
+function makeProgressBar(done, archived, total, childType) {
+    if (total === 0) return null;
+    const doneW     = (done     / total) * 100;
+    const archivedW = (archived / total) * 100;
+    const bar = h(".smsys-tree-progress", {
+        role: "progressbar",
+        "aria-valuenow":  done + archived,
+        "aria-valuemin":  0,
+        "aria-valuemax":  total,
+        "aria-label": `${done + archived} of ${total} ${childType}s complete (${done} done, ${archived} archived)`,
+        title: `${done + archived}/${total} complete`,
+        dataset: { done, archived, total, childType },
+    });
+    if (doneW     > 0) bar.appendChild(h(".smsys-tree-progress-fill.smsys-tree-progress-fill--done",     { style: { width: doneW     + "%" } }));
+    if (archivedW > 0) bar.appendChild(h(".smsys-tree-progress-fill.smsys-tree-progress-fill--archived", { style: { width: archivedW + "%" } }));
+    return bar;
+}
+
+function refreshProgressBar(row, done, archived, total, childType) {
+    const existing = row.querySelector(".smsys-tree-progress");
+    if (existing) existing.remove();
+    const newBar = makeProgressBar(done, archived, total, childType);
+    if (newBar) row.appendChild(newBar);
+}
+
 let dragState = null; // { type, id, disciplineId?, subjectId? }
 
 // ============================================================
@@ -841,9 +866,26 @@ async function renderDiscipline(d, refreshAll) {
         )
     );
 
+    const discProgBar = makeProgressBar(d.done_count ?? 0, d.archived_count ?? 0, d.subject_count, "subject");
+    if (discProgBar) headerRow.appendChild(discProgBar);
+
     wrap.appendChild(headerRow);
     wrap.appendChild(childrenEl);
     wireDisciplineDrag(wrap, dragHandle, d);
+
+    wrap.addEventListener("smsys-status-changed", (e) => {
+        if (e.detail.nodeType !== "subject") return;
+        const bar = headerRow.querySelector(".smsys-tree-progress");
+        let done     = parseInt(bar?.dataset.done     ?? "0");
+        let archived = parseInt(bar?.dataset.archived ?? "0");
+        const total  = parseInt(bar?.dataset.total    ?? "0") || d.subject_count;
+        if (e.detail.oldStatus === "done")     done     = Math.max(0, done - 1);
+        if (e.detail.oldStatus === "archived") archived = Math.max(0, archived - 1);
+        if (e.detail.newStatus === "done")     done++;
+        if (e.detail.newStatus === "archived") archived++;
+        refreshProgressBar(headerRow, done, archived, total, "subject");
+    });
+
     await loadSubjects(d.id, childrenEl, refreshAll);
     return { wrap, ...discStats };
 }
@@ -1008,9 +1050,26 @@ async function renderSubject(s, disciplineId, siblingContainer, refreshAll, stat
         )
     );
 
+    const subjProgBar = makeProgressBar(s.done_count ?? 0, s.archived_count ?? 0, s.topic_count, "topic");
+    if (subjProgBar) row.appendChild(subjProgBar);
+
     wrap.appendChild(row);
     wrap.appendChild(topicsEl);
     wireSubjectDrag(wrap, dragHandle, s, disciplineId, siblingContainer);
+
+    wrap.addEventListener("smsys-status-changed", (e) => {
+        if (e.detail.nodeType !== "topic") return;
+        const bar = row.querySelector(".smsys-tree-progress");
+        let done     = parseInt(bar?.dataset.done     ?? "0");
+        let archived = parseInt(bar?.dataset.archived ?? "0");
+        const total  = parseInt(bar?.dataset.total    ?? "0") || s.topic_count;
+        if (e.detail.oldStatus === "done")     done     = Math.max(0, done - 1);
+        if (e.detail.oldStatus === "archived") archived = Math.max(0, archived - 1);
+        if (e.detail.newStatus === "done")     done++;
+        if (e.detail.newStatus === "archived") archived++;
+        refreshProgressBar(row, done, archived, total, "topic");
+    });
+
     if (!startCollapsed) {
         await loadTopics(s.id, topicsEl, refreshAll);
     }

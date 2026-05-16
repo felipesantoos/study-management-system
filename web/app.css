@@ -1437,3 +1437,37 @@ mark.smsys-highlight {
 .smsys-tree-row[data-status="archived"]:hover {
     opacity: 0.65;
 }
+
+/* ----- progress bar (FDA-735) ----- */
+
+/* position:relative lets the absolute bar resolve against the row. */
+.smsys-tree-row.is-discipline,
+.smsys-tree-row.is-subject {
+    position: relative;
+}
+
+:root {
+    --smsys-progress-track:    var(--smsys-border);
+    --smsys-progress-done:     var(--smsys-stat-due);
+    --smsys-progress-archived: var(--smsys-status-archived);
+}
+
+.smsys-tree-progress {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--smsys-progress-track, var(--smsys-border));
+    border-radius: var(--smsys-radius-full);
+    overflow: hidden;
+    display: flex;
+    pointer-events: none;
+}
+
+.smsys-tree-progress-fill {
+    height: 100%;
+    transition: width var(--smsys-duration-base) var(--smsys-ease);
+}
+.smsys-tree-progress-fill--done     { background: var(--smsys-progress-done,     var(--smsys-stat-due));           }
+.smsys-tree-progress-fill--archived { background: var(--smsys-progress-archived, var(--smsys-status-archived));    }

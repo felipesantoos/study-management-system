@@ -33,6 +33,8 @@ def _row_to_discipline(row: sqlite3.Row) -> dict[str, Any]:
         "position": int(row["position"]),
         "note_count": int(row["note_count"]),
         "subject_count": int(row["subject_count"]),
+        "done_count": int(row["done_count"]),
+        "archived_count": int(row["archived_count"]),
         "study_status": row["study_status"],
     }
 
@@ -43,6 +45,8 @@ def _row_to_subject(row: sqlite3.Row) -> dict[str, Any]:
         "name": row["name"],
         "note_count": int(row["note_count"]),
         "topic_count": int(row["topic_count"]),
+        "done_count": int(row["done_count"]),
+        "archived_count": int(row["archived_count"]),
         "position": int(row["position"]),
         "study_status": row["study_status"],
     }
