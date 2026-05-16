@@ -55,6 +55,8 @@ export function openStatusPicker(triggerEl, nodeId, nodeType) {
         "aria-label": "Change status",
     });
 
+    pickerEl.appendChild(h("div.smsys-status-picker-header", "Change status"));
+
     for (const s of STATUSES) {
         const optionEl = h("button.smsys-status-option", {
             role: "option",

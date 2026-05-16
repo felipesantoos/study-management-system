@@ -1244,6 +1244,21 @@ mark.smsys-highlight {
 .smsys-status-picker:focus-visible {
     outline: none;
 }
+.night-mode .smsys-status-picker {
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.60);
+}
+
+.smsys-status-picker-header {
+    padding: 6px 10px 5px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--smsys-muted);
+    border-bottom: 1px solid var(--smsys-border);
+    margin-bottom: 4px;
+    user-select: none;
+}
 
 .smsys-status-option {
     display: grid;
@@ -1267,14 +1282,18 @@ mark.smsys-highlight {
     background: var(--smsys-hover);
     border-color: transparent;
 }
-.smsys-status-option.is-current { background: var(--smsys-sidebar-bg); }
+.smsys-status-option.is-current { background: var(--smsys-sidebar-active-bg); }
+.smsys-status-option.is-current:hover,
+.smsys-status-option.is-current.is-focused { background: var(--smsys-hover); }
+.smsys-status-option.is-current .smsys-status-option-label { color: var(--smsys-accent); }
 .smsys-status-option:focus-visible { outline: none; }
 
 .smsys-status-dot-sm {
+    display: block;
+    justify-self: center;
     width: 10px;
     height: 10px;
     border-radius: 50%;
-    flex-shrink: 0;
 }
 .smsys-status-dot-sm[data-status="backlog"]     { background: var(--smsys-status-backlog); }
 .smsys-status-dot-sm[data-status="todo"]        { background: var(--smsys-accent); }
