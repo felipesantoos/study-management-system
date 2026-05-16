@@ -702,6 +702,7 @@ async function renderDiscipline(d, refreshAll) {
         makeStatusDot(d, "discipline"),
         h("span.smsys-tree-name", d.name),
         h("span.smsys-badge", `${d.note_count} notes`),
+        d.subject_count > 0 && h("span.smsys-badge", `${d.subject_count} subject${d.subject_count === 1 ? "" : "s"}`),
         discStats.statsEl,
         h(".smsys-tree-actions", null,
             h("button.smsys-tree-action",

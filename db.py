@@ -179,7 +179,9 @@ class SubjectsDB:
                      + (SELECT COUNT(*) FROM note_assignments na
                           JOIN topics t ON t.id = na.topic_id
                           JOIN subjects s ON s.id = t.subject_id
-                         WHERE s.discipline_id = d.id) AS note_count
+                         WHERE s.discipline_id = d.id) AS note_count,
+                       (SELECT COUNT(*) FROM subjects
+                          WHERE discipline_id = d.id) AS subject_count
                   FROM disciplines d
                  ORDER BY d.position, d.name
                 """
