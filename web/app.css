@@ -191,7 +191,11 @@
 
 .smsys-tree-action {
     background: transparent;
-    border: none;
+    /* Anki's default webview.css applies `button:hover { border: 1px solid var(--shadow) }`
+     * globally, and `* { box-sizing: content-box }` means that border adds 2px to the
+     * button's height on hover. Inside .smsys-tree-row's flex layout that shifts the
+     * row height. Reserve a transparent 1px border so dimensions stay stable. */
+    border: 1px solid transparent;
     color: var(--smsys-muted);
     cursor: pointer;
     font: inherit;
@@ -200,12 +204,14 @@
 }
 .smsys-tree-action:hover {
     background: var(--smsys-bg);
+    border-color: transparent;
     color: var(--smsys-fg);
 }
 
 .smsys-tree-action.smsys-tree-action--study { color: var(--smsys-accent); }
 .smsys-tree-action.smsys-tree-action--study:hover {
     background: var(--smsys-bg);
+    border-color: transparent;
     color: var(--smsys-accent);
 }
 
@@ -554,14 +560,14 @@
     cursor: grab;
     color: var(--smsys-muted);
     padding: 0 6px 0 0;
-    opacity: 0;
+    opacity: 0.3;
     transition: opacity 0.1s;
     font-size: 15px;
     line-height: 1;
     user-select: none;
     flex-shrink: 0;
 }
-.smsys-tree-row:hover .smsys-drag-handle { opacity: 0.5; }
+.smsys-tree-row:hover .smsys-drag-handle { opacity: 0.7; }
 .smsys-drag-handle:hover { opacity: 1 !important; cursor: grab; }
 .smsys-drag-handle:active { cursor: grabbing; }
 
@@ -591,7 +597,7 @@
 
 .smsys-filter-input {
     width: 100%;
-    max-width: 360px;
+    max-width: 600px;
     padding: 6px 10px;
     border: 1px solid var(--smsys-border);
     border-radius: 4px;

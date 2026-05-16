@@ -46,19 +46,27 @@ function clearDragOver() {
 // Drag wiring
 // ============================================================
 
-function wireDisciplineDrag(wrap, d) {
-    wrap.draggable = true;
+// Only the drag handle is the drag SOURCE — keeping the wrap non-draggable
+// prevents click-vs-drag conflicts on the row (toggleCollapse + action buttons)
+// and stops descendant drags (subjects, topics) from being captured by the
+// outer wrap. The wrap remains the dragover / drop TARGET so the visual
+// indicator and drop logic still wrap the whole subtree.
+function wireDisciplineDrag(wrap, handle, d) {
     wrap.dataset.id = d.id;
+    handle.draggable = true;
 
-    wrap.addEventListener("dragstart", e => {
+    handle.addEventListener("dragstart", e => {
         dragState = { type: "discipline", id: d.id };
         wrap.classList.add("is-dragging");
         e.dataTransfer.effectAllowed = "move";
-        const header = wrap.querySelector(".smsys-tree-row.is-discipline");
+        // Some Chromium-based webviews drop the drop event entirely if
+        // dataTransfer has no data set during dragstart.
+        e.dataTransfer.setData("text/plain", `discipline:${d.id}`);
+        const header = wrap.querySelector(":scope > .smsys-tree-row.is-discipline");
         if (header) e.dataTransfer.setDragImage(header, 16, header.offsetHeight / 2);
     });
 
-    wrap.addEventListener("dragend", () => {
+    handle.addEventListener("dragend", () => {
         wrap.classList.remove("is-dragging");
         clearDragOver();
         dragState = null;
@@ -68,7 +76,11 @@ function wireDisciplineDrag(wrap, d) {
         if (!dragState || dragState.type !== "discipline" || dragState.id === d.id) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
-        const rect = wrap.getBoundingClientRect();
+        // Use the header row's rect — the wrap can be very tall when its
+        // children are expanded, which would otherwise push the midpoint
+        // far below the visible header.
+        const header = wrap.querySelector(":scope > .smsys-tree-row.is-discipline");
+        const rect = (header || wrap).getBoundingClientRect();
         const isAfter = e.clientY > rect.top + rect.height / 2;
         wrap.classList.toggle("is-drag-over-before", !isAfter);
         wrap.classList.toggle("is-drag-over-after", isAfter);
@@ -93,20 +105,20 @@ function wireDisciplineDrag(wrap, d) {
     });
 }
 
-function wireSubjectDrag(wrap, s, disciplineId, container) {
-    wrap.draggable = true;
+function wireSubjectDrag(wrap, handle, s, disciplineId, container) {
     wrap.dataset.id = s.id;
+    handle.draggable = true;
 
-    wrap.addEventListener("dragstart", e => {
+    handle.addEventListener("dragstart", e => {
         dragState = { type: "subject", id: s.id, disciplineId };
         wrap.classList.add("is-dragging");
         e.dataTransfer.effectAllowed = "move";
-        const header = wrap.querySelector(".smsys-tree-row.is-subject");
+        e.dataTransfer.setData("text/plain", `subject:${s.id}`);
+        const header = wrap.querySelector(":scope > .smsys-tree-row.is-subject");
         if (header) e.dataTransfer.setDragImage(header, 16, header.offsetHeight / 2);
-        e.stopPropagation();
     });
 
-    wrap.addEventListener("dragend", () => {
+    handle.addEventListener("dragend", () => {
         wrap.classList.remove("is-dragging");
         clearDragOver();
         dragState = null;
@@ -118,7 +130,8 @@ function wireSubjectDrag(wrap, s, disciplineId, container) {
             || dragState.id === s.id) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
-        const rect = wrap.getBoundingClientRect();
+        const header = wrap.querySelector(":scope > .smsys-tree-row.is-subject");
+        const rect = (header || wrap).getBoundingClientRect();
         const isAfter = e.clientY > rect.top + rect.height / 2;
         wrap.classList.toggle("is-drag-over-before", !isAfter);
         wrap.classList.toggle("is-drag-over-after", isAfter);
@@ -144,19 +157,19 @@ function wireSubjectDrag(wrap, s, disciplineId, container) {
     });
 }
 
-function wireTopicDrag(row, t, subjectId, container) {
-    row.draggable = true;
+function wireTopicDrag(row, handle, t, subjectId, container) {
     row.dataset.id = t.id;
+    handle.draggable = true;
 
-    row.addEventListener("dragstart", e => {
+    handle.addEventListener("dragstart", e => {
         dragState = { type: "topic", id: t.id, subjectId };
         row.classList.add("is-dragging");
         e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", `topic:${t.id}`);
         e.dataTransfer.setDragImage(row, 16, row.offsetHeight / 2);
-        e.stopPropagation();
     });
 
-    row.addEventListener("dragend", () => {
+    handle.addEventListener("dragend", () => {
         row.classList.remove("is-dragging");
         clearDragOver();
         dragState = null;
@@ -545,7 +558,7 @@ async function renderDiscipline(d, refreshAll) {
 
     wrap.appendChild(headerRow);
     wrap.appendChild(childrenEl);
-    wireDisciplineDrag(wrap, d);
+    wireDisciplineDrag(wrap, dragHandle, d);
     await loadSubjects(d.id, childrenEl, refreshAll);
     return { wrap, statsEl: discStatsEl, dueEl: discDueEl, newEl: discNewEl, lrnEl: discLrnEl };
 }
@@ -632,6 +645,7 @@ async function renderSubject(s, disciplineId, siblingContainer, refreshAll, stat
         caretEl,
         h("span.smsys-tree-name", s.name),
         h("span.smsys-badge", `${s.note_count} notes`),
+        s.topic_count > 0 && h("span.smsys-badge", `${s.topic_count} topic${s.topic_count === 1 ? "" : "s"}`),
         statsEl,
         h(".smsys-tree-actions", null,
             h("button.smsys-tree-action",
@@ -698,7 +712,7 @@ async function renderSubject(s, disciplineId, siblingContainer, refreshAll, stat
 
     wrap.appendChild(row);
     wrap.appendChild(topicsEl);
-    wireSubjectDrag(wrap, s, disciplineId, siblingContainer);
+    wireSubjectDrag(wrap, dragHandle, s, disciplineId, siblingContainer);
     if (!startCollapsed) {
         await loadTopics(s.id, topicsEl, refreshAll);
     }
@@ -794,7 +808,7 @@ async function loadTopics(subjectId, container, refreshAll) {
                 ),
             )
         );
-        wireTopicDrag(row, t, subjectId, container);
+        wireTopicDrag(row, dragHandle, t, subjectId, container);
         container.appendChild(row);
     }
 
