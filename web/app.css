@@ -1286,6 +1286,7 @@ mark.smsys-highlight {
 .smsys-status-option.is-current:hover,
 .smsys-status-option.is-current.is-focused { background: var(--smsys-hover); }
 .smsys-status-option.is-current .smsys-status-option-label { color: var(--smsys-accent); }
+.smsys-status-option + .smsys-status-option { margin-top: 2px; }
 .smsys-status-option:focus-visible { outline: none; }
 
 .smsys-status-dot-sm {
