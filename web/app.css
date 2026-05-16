@@ -12,6 +12,8 @@
     --smsys-hover: #f3f5f7;
     --smsys-sidebar-bg: #f7f8fa;
     --smsys-danger: #dc3545;
+    --smsys-stat-new: #28a745;
+    --smsys-stat-lrn: #fd7e14;
 }
 
 .night-mode {
@@ -24,6 +26,8 @@
     --smsys-hover: #28282c;
     --smsys-sidebar-bg: #18181b;
     --smsys-danger: #ff6b6b;
+    --smsys-stat-new: #4cbb6d;
+    --smsys-stat-lrn: #ff9b45;
 }
 
 #smsys-root {
@@ -185,6 +189,23 @@
 .smsys-tree-action:hover {
     background: var(--smsys-bg);
     color: var(--smsys-fg);
+}
+
+/* ----- discipline color swatch ----- */
+.smsys-color-btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.smsys-color-dot {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--smsys-muted);
+    border: 1.5px solid rgba(0, 0, 0, 0.2);
+    flex-shrink: 0;
 }
 
 .smsys-badge {
@@ -358,3 +379,34 @@
     gap: 6px;
     margin-top: 8px;
 }
+
+/* ----- per-subject card stats strip ----- */
+.smsys-subject-stats {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 1px 8px;
+    background: var(--smsys-border);
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-right: 8px;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.smsys-subject-stats.is-loading {
+    opacity: 0.4;
+}
+
+.smsys-subject-stats.is-all-zero {
+    opacity: 0.35;
+}
+
+.smsys-subject-stats.is-error {
+    opacity: 0.4;
+}
+
+.smsys-stat.is-due { color: var(--smsys-accent); }
+.smsys-stat.is-new { color: var(--smsys-stat-new); }
+.smsys-stat.is-lrn { color: var(--smsys-stat-lrn); }

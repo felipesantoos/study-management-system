@@ -9,6 +9,10 @@ export async function render(container) {
         h(".smsys-page-header", null,
             h("h1.smsys-page-title", "Disciplines & Subjects"),
             h("div.smsys-page-actions", null,
+                h("button.smsys-btn",
+                    { onClick: () => refresh() },
+                    "↺ Refresh"
+                ),
                 h("button.smsys-btn.smsys-btn-primary",
                     { onClick: onNewDiscipline },
                     "+ New Discipline"
@@ -74,6 +78,11 @@ async function renderDiscipline(d, refreshAll) {
     const wrap = h(".smsys-tree-discipline");
     const childrenEl = h(".smsys-tree-children");
 
+    if (d.color) {
+        wrap.style.borderLeftColor = d.color;
+        wrap.style.borderLeftWidth = "4px";
+    }
+
     const storageKey = `smsys_discipline_collapsed_${d.id}`;
     const startCollapsed = localStorage.getItem(storageKey) === "1";
 
@@ -88,10 +97,37 @@ async function renderDiscipline(d, refreshAll) {
         localStorage.setItem(storageKey, collapsed ? "0" : "1");
     }
 
+    const colorDot = h("span.smsys-color-dot");
+    if (d.color) colorDot.style.background = d.color;
+
+    const colorInput = document.createElement("input");
+    colorInput.type = "color";
+    colorInput.value = d.color || "#0d6efd";
+    colorInput.style.cssText = "position:absolute;width:0;height:0;overflow:hidden;opacity:0;";
+    colorInput.addEventListener("change", async () => {
+        const color = colorInput.value;
+        try {
+            await invoke("disciplines.set_color", { id: d.id, color });
+            d.color = color;
+            colorDot.style.background = color;
+            wrap.style.borderLeftColor = color;
+            wrap.style.borderLeftWidth = "4px";
+        } catch (err) {
+            toast(err.message, { error: true });
+        }
+    });
+
+    const swatchBtn = h("button.smsys-tree-action.smsys-color-btn",
+        { title: "Set color", onClick: (e) => { e.stopPropagation(); colorInput.click(); } },
+        colorDot
+    );
+    swatchBtn.appendChild(colorInput);
+
     const headerRow = h(".smsys-tree-row.is-discipline", { onClick: toggleCollapse },
         caretEl,
         h("span.smsys-tree-name", d.name),
         h(".smsys-tree-actions", null,
+            swatchBtn,
             h("button.smsys-tree-action",
                 { title: "Add subject", onClick: (e) => { e.stopPropagation(); onAddSubject(d, childrenEl, refreshAll); } },
                 "+ subject"

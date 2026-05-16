@@ -44,11 +44,22 @@ class SubjectsDB:
             """
         )
         self.con.commit()
+        cols = {row[1] for row in self.con.execute("PRAGMA table_info(disciplines)")}
+        if "color" not in cols:
+            self.con.execute("ALTER TABLE disciplines ADD COLUMN color TEXT")
+            self.con.commit()
 
     def list_disciplines(self) -> list[sqlite3.Row]:
         return list(
-            self.con.execute("SELECT id, name FROM disciplines ORDER BY name")
+            self.con.execute("SELECT id, name, color FROM disciplines ORDER BY name")
         )
+
+    def set_discipline_color(self, discipline_id: int, color: str | None) -> None:
+        self.con.execute(
+            "UPDATE disciplines SET color = ? WHERE id = ?",
+            (color, discipline_id),
+        )
+        self.con.commit()
 
     def add_discipline(self, name: str) -> int:
         cur = self.con.execute(
@@ -167,6 +178,9 @@ class SubjectsDB:
                 (subject_id,),
             )
         ]
+
+    def assigned_note_ids(self) -> set[int]:
+        return {row[0] for row in self.con.execute("SELECT note_id FROM note_subjects")}
 
     def delete_note_assignments(self, note_ids: Sequence[int]) -> None:
         if not note_ids:

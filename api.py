@@ -22,7 +22,7 @@ from .db import db
 
 
 def _row_to_discipline(row: sqlite3.Row) -> dict[str, Any]:
-    return {"id": int(row["id"]), "name": row["name"]}
+    return {"id": int(row["id"]), "name": row["name"], "color": row["color"]}
 
 
 def _row_to_subject(row: sqlite3.Row) -> dict[str, Any]:
@@ -61,6 +61,14 @@ def disciplines_rename(id: int, name: str) -> None:
         db().rename_discipline(int(id), name)
     except sqlite3.IntegrityError:
         raise ValueError(f"A discipline named '{name}' already exists.")
+
+
+@register("disciplines.set_color")
+def disciplines_set_color(id: int, color: str | None) -> None:
+    import re
+    if color and not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
+        raise ValueError("Invalid color format.")
+    db().set_discipline_color(int(id), color or None)
 
 
 @register("disciplines.delete")
@@ -108,6 +116,36 @@ def subjects_delete(id: int) -> None:
 def subjects_note_ids(id: int) -> list[int]:
     return [int(n) for n in db().note_ids_for_subject(int(id))]
 
+@register("subjects.stats")
+def subjects_stats(ids: list) -> list[dict[str, Any]]:
+    """Return due / new / learning card counts for a list of subject IDs.
+
+    Reads queue/due columns from Anki's cards table directly so we don't
+    disturb the scheduler's internal state.  Queue semantics:
+      0 = new, 1 = intraday learning, 2 = review, 3 = interday learning.
+    """
+    if not ids:
+        return []
+    assert mw is not None
+    col = mw.col
+    today = col.sched.today
+    result = []
+    for sid in ids:
+        note_ids = [int(n) for n in db().note_ids_for_subject(int(sid))]
+        if not note_ids:
+            result.append({"id": int(sid), "due": 0, "new": 0, "lrn": 0})
+            continue
+        placeholders = ",".join("?" * len(note_ids))
+        rows = col.db.all(
+            f"SELECT queue, due FROM cards WHERE nid IN ({placeholders})",
+            *note_ids,
+        )
+        due_count = sum(1 for q, d in rows if q == 2 and d <= today)
+        new_count = sum(1 for q, d in rows if q == 0)
+        lrn_count = sum(1 for q, d in rows if q == 1 or (q == 3 and d <= today))
+        result.append({"id": int(sid), "due": due_count, "new": new_count, "lrn": lrn_count})
+    return result
+
 
 # ----- notes ↔ subjects ---------------------------------------------
 
@@ -126,6 +164,14 @@ def notes_bulk_assign(note_ids: list[int], subject_id: int | None) -> int:
         ids, int(subject_id) if subject_id is not None else None
     )
     return len(ids)
+
+
+@register("notes.unassigned_ids")
+def notes_unassigned_ids() -> list[int]:
+    assert mw is not None and mw.col is not None
+    all_ids: set[int] = set(mw.col.find_notes(""))
+    assigned = db().assigned_note_ids()
+    return sorted(all_ids - assigned)
 
 
 @register("notes.get_subject")
