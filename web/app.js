@@ -29,10 +29,20 @@ function buildShell() {
             if (item.badgeId) {
                 children.push(h("span.smsys-badge", { id: item.badgeId, style: { marginLeft: "6px", marginRight: "0" } }));
             }
+            // Use a click handler + router.navigate instead of letting the
+            // browser change window.location.hash via <a href="#/…">. Anki's
+            // mw.web rejects same-page fragment navigation in
+            // AnkiWebView.acceptNavigationRequest (prints "onclick handler
+            // needs to return false"), which silently swallowed every
+            // sidebar click except the initial default route.
             return h("a.smsys-nav-item",
                 {
                     href: "#" + item.path,
                     dataset: { path: item.path },
+                    onClick: (e) => {
+                        e.preventDefault();
+                        router.navigate(item.path);
+                    },
                 },
                 ...children
             );
