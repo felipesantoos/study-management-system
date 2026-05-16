@@ -421,21 +421,19 @@
    badge / stats margins are reset to 0 so only the grid's column-gap
    controls spacing. */
 /* Two-zone flex layout: [badges group | stats pill].
-   .smsys-meta-badges is a fixed-width flex container with justify-content:
-   flex-end so badges stack from the right. When a row type has only one badge
-   (topics), it naturally lands at the right edge of the zone — the same
-   position as the second badge in discipline/subject rows — giving perfect
-   cross-row alignment without empty placeholder nodes.
-   Zone widths: badges = 186px (78 notes + 8 gap + 100 children), stats = 120px.
-   Total = 186 + 8 gap + 120 = 314px. */
+   Only the badges group has a fixed width — that's what keeps the notes /
+   children badges vertically aligned across discipline, subject, and topic
+   rows. The stats pill is intrinsic so it doesn't pad itself out with empty
+   space after the "learning" stat. The meta container itself is intrinsic
+   too, so the actions zone sits right next to stats with the margin-right
+   below providing breathing room. */
 .smsys-tree-meta {
     display: flex;
     gap: var(--smsys-space-2);
     align-items: center;
     flex-shrink: 0;
     margin-left: auto;
-    margin-right: var(--smsys-space-2);
-    width: 314px;
+    margin-right: var(--smsys-space-4);
 }
 .smsys-meta-badges {
     display: flex;
@@ -446,7 +444,7 @@
     flex-shrink: 0;
 }
 .smsys-meta-badges .smsys-badge { margin: 0; }
-.smsys-tree-meta .smsys-subject-stats { width: 120px; flex-shrink: 0; margin: 0; }
+.smsys-tree-meta .smsys-subject-stats { flex: 0 0 auto; margin: 0; }
 
 .smsys-tree-actions {
     /* Intrinsic width — the container shrinks to the exact sum of its
