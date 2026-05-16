@@ -9,13 +9,16 @@ tag under the smsys:: namespace.  Tag format:
 
 This module owns every Anki-tag mutation.  db.py and api.py have no knowledge
 of tag operations.
-
-Phase 1 (this file): config plumbing only — enabled() + hot-reload.
-Phases 2-5 add the actual tag-write helpers.
 """
 from __future__ import annotations
 
+import re
+from typing import Callable, Sequence
+
 from aqt import mw
+
+from .db import SubjectsDB, db as _db_global
+
 
 # ---------------------------------------------------------------------------
 # In-memory config cache
@@ -53,3 +56,178 @@ def on_config_changed(cfg: dict) -> None:
 
 _sync_enabled = _read_config()
 mw.addonManager.setConfigUpdatedAction(__name__, on_config_changed)
+
+
+# ---------------------------------------------------------------------------
+# Pure helpers
+# ---------------------------------------------------------------------------
+
+
+def _safe(name: str) -> str:
+    """Sanitize a hierarchy component for use in an Anki tag.
+
+    Whitespace runs → '_', '::' → '__', strip edges, fallback to '_'.
+    """
+    name = name.strip()
+    name = re.sub(r"::", "__", name)
+    name = re.sub(r"\s+", "_", name)
+    return name or "_"
+
+
+def _is_smsys_tag(tag: str) -> bool:
+    return tag.startswith("smsys::")
+
+
+# ---------------------------------------------------------------------------
+# Tag computation
+# ---------------------------------------------------------------------------
+
+
+def tag_for(
+    kind: str, target_id: int, *, _db: SubjectsDB | None = None
+) -> str | None:
+    """Return the full smsys:: tag for (kind, target_id), or None if gone."""
+    database = _db if _db is not None else _db_global()
+    if kind == "discipline":
+        row = database.get_discipline(target_id)
+        if row is None:
+            return None
+        return f"smsys::{_safe(row['name'])}"
+    if kind == "subject":
+        row = database.get_subject(target_id)
+        if row is None:
+            return None
+        return f"smsys::{_safe(row['discipline_name'])}::{_safe(row['subject_name'])}"
+    if kind == "topic":
+        row = database.get_topic(target_id)
+        if row is None:
+            return None
+        return (
+            f"smsys::{_safe(row['discipline_name'])}"
+            f"::{_safe(row['subject_name'])}"
+            f"::{_safe(row['topic_name'])}"
+        )
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Private write-path helpers — single chokepoint for all tag mutations
+# ---------------------------------------------------------------------------
+
+
+def _set_note_tag(col, note_id: int, new_tag: str | None) -> None:
+    """Strip all smsys:: tags from one note and optionally append new_tag.
+
+    Single entry-point for every tag write; one note.tags assignment per call.
+    """
+    note = col.get_note(note_id)
+    new_list = [t for t in note.tags if not _is_smsys_tag(t)]
+    if new_tag:
+        new_list.append(new_tag)
+    if new_list != note.tags:
+        note.tags = new_list
+        col.update_note(note)
+
+
+def _execute_batch(
+    note_ids: list[int], tag_fn: Callable[[int], str | None]
+) -> None:
+    """Apply tag_fn(nid) for each note; wrap >50 notes in CollectionOp."""
+    if not note_ids:
+        return
+
+    def _op(col):
+        undo_id = col.add_custom_undo_entry("Update smsys:: tags")
+        for nid in note_ids:
+            _set_note_tag(col, nid, tag_fn(nid))
+        return col.merge_undo_entries(undo_id)
+
+    if len(note_ids) > 50:
+        from aqt.operations import CollectionOp
+
+        CollectionOp(parent=mw, op=_op).run_in_background()
+    else:
+        _op(mw.col)
+
+
+def _tag_for_assignment(row) -> str | None:
+    """Derive the smsys tag directly from a get_note_assignment row.
+
+    Uses names already resolved in the row to avoid a second DB round-trip.
+    """
+    if row["direct_topic_id"] is not None:
+        return (
+            f"smsys::{_safe(row['discipline_name'])}"
+            f"::{_safe(row['subject_name'])}"
+            f"::{_safe(row['topic_name'])}"
+        )
+    if row["direct_subject_id"] is not None:
+        return f"smsys::{_safe(row['discipline_name'])}::{_safe(row['subject_name'])}"
+    return f"smsys::{_safe(row['discipline_name'])}"
+
+
+# ---------------------------------------------------------------------------
+# Public write paths — all guarded by enabled()
+# ---------------------------------------------------------------------------
+
+
+def apply_assignment(
+    note_ids: Sequence[int],
+    kind: str | None,
+    target_id: int | None,
+) -> None:
+    """Strip any smsys::* tag from each note and (if given) append the new tag."""
+    if not enabled():
+        return
+    if not note_ids:
+        return
+    new_tag: str | None = None
+    if kind is not None and target_id is not None:
+        new_tag = tag_for(kind, target_id)
+    _execute_batch(list(note_ids), lambda _nid: new_tag)
+
+
+def strip_smsys_tags(note_ids: Sequence[int]) -> None:
+    """Remove any smsys::* tags from the given notes."""
+    if not enabled():
+        return
+    _execute_batch(list(note_ids), lambda _nid: None)
+
+
+def refresh_discipline_notes(discipline_id: int) -> None:
+    """Re-apply the correct tag for all notes under a discipline (e.g. after rename)."""
+    if not enabled():
+        return
+    _refresh_notes(_db_global().note_ids_for_discipline(discipline_id))
+
+
+def refresh_subject_notes(subject_id: int) -> None:
+    """Re-apply the correct tag for all notes under a subject (e.g. after rename)."""
+    if not enabled():
+        return
+    _refresh_notes(_db_global().note_ids_for_subject(subject_id))
+
+
+def refresh_topic_notes(topic_id: int) -> None:
+    """Re-apply the correct tag for all notes in a topic (e.g. after rename)."""
+    if not enabled():
+        return
+    _refresh_notes(_db_global().note_ids_for_topic(topic_id))
+
+
+def _refresh_notes(note_ids: list[int]) -> None:
+    """Re-derive and apply the correct smsys tag per note from its DB placement."""
+    database = _db_global()
+
+    def _tag_for_note(nid: int) -> str | None:
+        row = database.get_note_assignment(nid)
+        if row is None:
+            return None
+        return _tag_for_assignment(row)
+
+    _execute_batch(note_ids, _tag_for_note)
+
+
+def backfill_all() -> None:
+    """Backfill smsys tags for all assigned notes (phase 5 fills this)."""
+    pass
