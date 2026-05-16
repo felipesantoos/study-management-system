@@ -1322,7 +1322,7 @@ mark.smsys-highlight {
     border: 1px solid var(--smsys-neutral-200);
     border-radius: 8px;
     box-shadow: var(--smsys-shadow-popover);
-    padding: 4px;
+    padding: 6px;
     min-width: 230px;
 }
 /* Picker holds focus while open so SRs observe aria-activedescendant updates.
@@ -1351,7 +1351,6 @@ mark.smsys-highlight {
     grid-template-columns: 14px 1fr 16px;
     align-items: center;
     gap: 8px;
-    width: 100%;
     padding: 9px;
     border: 1px solid transparent;
     background: transparent;
