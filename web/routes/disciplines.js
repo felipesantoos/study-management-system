@@ -281,7 +281,7 @@ export async function render(container) {
                             const sChildren = sWrap.querySelector(":scope > .smsys-tree-children");
                             const sCaret = sWrap.querySelector(":scope > .smsys-tree-row .smsys-tree-caret");
                             const sKey = sWrap.dataset.storageKey;
-                            const sWasCollapsed = sKey && localStorage.getItem(sKey) === "1";
+                            const sWasCollapsed = !sKey || localStorage.getItem(sKey) !== "0";
                             if (sChildren) sChildren.style.display = sWasCollapsed ? "none" : "";
                             if (sCaret) sCaret.textContent = sWasCollapsed ? "▸" : "▾";
                             sWrap.querySelectorAll(".smsys-tree-row.is-topic")
