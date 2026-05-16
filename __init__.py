@@ -190,6 +190,7 @@ def _on_note_added(note: Note) -> None:
         kind, target_id = pending
         try:
             db().assign_note(int(note.id), kind, target_id)
+            _tagsync.apply_assignment([int(note.id)], kind, target_id)
         except sqlite3.Error:
             pass
         return
@@ -244,7 +245,9 @@ def _bulk_assign_from_browser(browser: Any) -> None:
     if dlg.exec() != QDialog.DialogCode.Accepted:
         return
 
-    db().bulk_assign([int(n) for n in nids], dlg.chosen_kind, dlg.chosen_id)
+    int_nids = [int(n) for n in nids]
+    db().bulk_assign(int_nids, dlg.chosen_kind, dlg.chosen_id)
+    _tagsync.apply_assignment(int_nids, dlg.chosen_kind, dlg.chosen_id)
     if dlg.cleared:
         tooltip(f"Unassigned {len(nids)} note(s).")
     else:
