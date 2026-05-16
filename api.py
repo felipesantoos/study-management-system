@@ -19,6 +19,7 @@ from aqt import mw
 
 from .bridge import register
 from .db import ASSIGNMENT_KINDS, db
+from . import tagsync
 
 
 # ----- helpers -------------------------------------------------------
@@ -39,6 +40,7 @@ def _row_to_subject(row: sqlite3.Row) -> dict[str, Any]:
         "id": int(row["id"]),
         "name": row["name"],
         "note_count": int(row["note_count"]),
+        "topic_count": int(row["topic_count"]),
         "position": int(row["position"]),
     }
 
@@ -114,6 +116,7 @@ def disciplines_rename(id: int, name: str) -> None:
         db().rename_discipline(int(id), name)
     except sqlite3.IntegrityError:
         raise ValueError(f"A discipline named '{name}' already exists.")
+    tagsync.refresh_discipline_notes(int(id))
 
 
 @register("disciplines.set_color")
@@ -126,7 +129,9 @@ def disciplines_set_color(id: int, color: str | None) -> None:
 
 @register("disciplines.delete")
 def disciplines_delete(id: int) -> None:
+    note_ids = db().note_ids_for_discipline(int(id), include_descendants=True)
     db().delete_discipline(int(id))
+    tagsync.strip_smsys_tags(note_ids)
 
 
 @register("disciplines.reorder")
@@ -184,11 +189,14 @@ def subjects_rename(id: int, name: str) -> None:
         raise ValueError(
             f"A subject named '{name}' already exists in this discipline."
         )
+    tagsync.refresh_subject_notes(int(id))
 
 
 @register("subjects.delete")
 def subjects_delete(id: int) -> None:
+    note_ids = db().note_ids_for_subject(int(id), include_descendants=True)
     db().delete_subject(int(id))
+    tagsync.strip_smsys_tags(note_ids)
 
 
 @register("subjects.reorder")
@@ -247,11 +255,14 @@ def topics_rename(id: int, name: str) -> None:
         raise ValueError(
             f"A topic named '{name}' already exists in this subject."
         )
+    tagsync.refresh_topic_notes(int(id))
 
 
 @register("topics.delete")
 def topics_delete(id: int) -> None:
+    note_ids = db().note_ids_for_topic(int(id))
     db().delete_topic(int(id))
+    tagsync.strip_smsys_tags(note_ids)
 
 
 @register("topics.reorder")
@@ -287,6 +298,7 @@ def notes_assign(
 ) -> None:
     kind, tid = _normalize_target(target_kind, target_id)
     db().assign_note(int(note_id), kind, tid)
+    tagsync.apply_assignment([int(note_id)], kind, tid)
 
 
 @register("notes.bulk_assign")
@@ -298,6 +310,7 @@ def notes_bulk_assign(
     ids = [int(n) for n in note_ids]
     kind, tid = _normalize_target(target_kind, target_id)
     db().bulk_assign(ids, kind, tid)
+    tagsync.apply_assignment(ids, kind, tid)
     return len(ids)
 
 
@@ -307,6 +320,14 @@ def notes_unassigned_ids() -> list[int]:
     all_ids: set[int] = set(mw.col.find_notes(""))
     assigned = db().assigned_note_ids()
     return sorted(all_ids - assigned)
+
+
+@register("notes.unassigned_count")
+def notes_unassigned_count() -> int:
+    assert mw is not None and mw.col is not None
+    all_ids: set[int] = set(mw.col.find_notes(""))
+    assigned = db().assigned_note_ids()
+    return len(all_ids - assigned)
 
 
 @register("notes.get_assignment")
