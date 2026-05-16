@@ -1,21 +1,132 @@
 /* Study Management System — base styles.
  * Anki sets `night-mode` on <body> (and `data-bs-theme="dark"` on <html>)
- * when dark mode is active. Light is the default. */
+ * when dark mode is active. Light is the default.
+ *
+ * Phase 1 of the FDA-706 redesign establishes the full design-token foundation
+ * (color, type, spacing, radius, shadow, motion). Every value below references
+ * a token — components never hard-code design values. New components added in
+ * later phases should follow the same rule. */
 
 :root {
+    /* === Color tokens ===================================================== */
+
+    /* Neutral scale (slate-aligned to match the FDA-708 status colors). */
+    --smsys-neutral-50:  #f8fafc;
+    --smsys-neutral-100: #f1f5f9;
+    --smsys-neutral-200: #e2e8f0;
+    --smsys-neutral-300: #cbd5e1;
+    --smsys-neutral-400: #94a3b8;
+    --smsys-neutral-500: #64748b;
+    --smsys-neutral-600: #475569;
+    --smsys-neutral-700: #334155;
+    --smsys-neutral-800: #1e293b;
+    --smsys-neutral-900: #0f172a;
+
+    /* Brand scale. */
+    --smsys-brand-400: #4ea3ff;  /* hover / dark accent */
+    --smsys-brand-500: #0d6efd;  /* primary */
+    --smsys-brand-600: #0b5ed7;  /* pressed */
+
+    /* Discipline palette — 12 vibrant, WCAG-AA-safe hues used for
+       per-discipline color coding throughout the app. */
+    --smsys-disc-red:    #ef4444;
+    --smsys-disc-orange: #f97316;
+    --smsys-disc-amber:  #f59e0b;
+    --smsys-disc-yellow: #eab308;
+    --smsys-disc-lime:   #84cc16;
+    --smsys-disc-green:  #22c55e;
+    --smsys-disc-teal:   #14b8a6;
+    --smsys-disc-cyan:   #06b6d4;
+    --smsys-disc-blue:   #3b82f6;
+    --smsys-disc-violet: #8b5cf6;
+    --smsys-disc-purple: #a855f7;
+    --smsys-disc-pink:   #ec4899;
+
+    /* === Typography ======================================================= */
+
+    --smsys-text-xs:   11px;
+    --smsys-text-sm:   12px;
+    --smsys-text-base: 14px;
+    --smsys-text-lg:   16px;
+    --smsys-text-xl:   20px;
+    --smsys-text-2xl:  24px;
+    --smsys-text-3xl:  32px;
+
+    --smsys-weight-regular:  400;
+    --smsys-weight-medium:   500;
+    --smsys-weight-semibold: 600;
+    --smsys-weight-bold:     700;
+
+    --smsys-leading-tight:   1.2;
+    --smsys-leading-normal:  1.5;
+    --smsys-leading-relaxed: 1.7;
+
+    /* === Spacing scale (4px base) ========================================= */
+
+    --smsys-space-1:  4px;
+    --smsys-space-2:  8px;
+    --smsys-space-3:  12px;
+    --smsys-space-4:  16px;
+    --smsys-space-5:  20px;
+    --smsys-space-6:  24px;
+    --smsys-space-8:  32px;
+    --smsys-space-10: 40px;
+    --smsys-space-12: 48px;
+    --smsys-space-16: 64px;
+
+    /* === Border radius ==================================================== */
+
+    --smsys-radius-sm:   4px;
+    --smsys-radius-md:   6px;
+    --smsys-radius-lg:   8px;
+    --smsys-radius-xl:   12px;
+    --smsys-radius-2xl:  16px;
+    --smsys-radius-full: 9999px;
+
+    /* === Shadows ========================================================== */
+
+    --smsys-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+    --smsys-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.12);
+    --smsys-shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.20);
+
+    /* === Motion =========================================================== */
+
+    --smsys-duration-micro: 80ms;
+    --smsys-duration-fast:  150ms;
+    --smsys-duration-base:  200ms;
+    --smsys-duration-slow:  300ms;
+    --smsys-ease: cubic-bezier(0.4, 0, 0.2, 1);
+
+    /* === Semantic tokens (light) ========================================== */
+
     --smsys-bg: #ffffff;
     --smsys-fg: #2c3e50;
     --smsys-muted: #6c757d;
     --smsys-border: #e0e0e0;
-    --smsys-accent: #0d6efd;
+    --smsys-accent: var(--smsys-brand-500);
     --smsys-accent-fg: #ffffff;
     --smsys-hover: #f3f5f7;
     --smsys-sidebar-bg: #f7f8fa;
+    --smsys-sidebar-active-bg: rgba(13, 110, 253, 0.10);
+    --smsys-sidebar-active-fg: var(--smsys-accent);
     --smsys-danger: #dc3545;
     --smsys-stat-new: #28a745;
     --smsys-stat-lrn: #fd7e14;
-    --smsys-status-backlog:  #94a3b8;
-    --smsys-status-archived: #94a3b8;
+
+    /* Status tokens shipped in FDA-708 — must not be overwritten by later
+       phases. Other status colors reuse existing semantic tokens.
+       Slate-500 #64748b keeps the muted look while meeting WCAG 1.4.11
+       (≥4.7:1 on #ffffff, ≥3.5:1 on #1d1d20). The earlier slate-400 token
+       fell to ~2.6:1 on white and ~2.2:1 on dark; archived rows still
+       differentiate via opacity + strikethrough on .smsys-tree-row. */
+    --smsys-status-backlog:  #64748b;
+    --smsys-status-archived: #64748b;
+
+    /* Translucent surfaces (overlay, highlight, focus glow, swatch hairline). */
+    --smsys-overlay-bg:        rgba(0, 0, 0, 0.40);
+    --smsys-highlight-bg:      rgba(13, 110, 253, 0.18);
+    --smsys-focus-ring-bg:     rgba(13, 110, 253, 0.15);
+    --smsys-color-dot-border:  rgba(0, 0, 0, 0.20);
 }
 
 .night-mode {
@@ -23,15 +134,20 @@
     --smsys-fg: #e6e6e6;
     --smsys-muted: #9aa0a6;
     --smsys-border: #2e2e32;
-    --smsys-accent: #4ea3ff;
+    --smsys-accent: var(--smsys-brand-400);
     --smsys-accent-fg: #0a0a0a;
     --smsys-hover: #28282c;
     --smsys-sidebar-bg: #18181b;
+    --smsys-sidebar-active-bg: rgba(78, 163, 255, 0.15);
+    --smsys-sidebar-active-fg: var(--smsys-accent);
     --smsys-danger: #ff6b6b;
     --smsys-stat-new: #4cbb6d;
     --smsys-stat-lrn: #ff9b45;
     --smsys-status-backlog:  #64748b;
-    --smsys-status-archived: #475569;
+    --smsys-status-archived: #64748b;
+
+    --smsys-highlight-bg:  rgba(78, 163, 255, 0.22);
+    --smsys-focus-ring-bg: rgba(78, 163, 255, 0.18);
 }
 
 #smsys-root {
@@ -41,37 +157,41 @@
     background: var(--smsys-bg);
     color: var(--smsys-fg);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    font-size: 14px;
+    font-size: var(--smsys-text-base);
     overflow: hidden;
 }
 
 /* ----- sidebar ----- */
 .smsys-sidebar {
-    width: 220px;
-    flex: 0 0 220px;
+    width: 240px;
+    flex: 0 0 240px;
     background: var(--smsys-sidebar-bg);
     border-right: 1px solid var(--smsys-border);
-    padding: 16px 0;
+    padding: var(--smsys-space-4) 0;
     overflow-y: auto;
 }
 
 .smsys-sidebar-title {
-    padding: 0 16px 12px;
-    font-size: 13px;
-    font-weight: 600;
+    padding: 0 var(--smsys-space-4) var(--smsys-space-3);
+    font-size: var(--smsys-text-sm);
+    font-weight: var(--smsys-weight-semibold);
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--smsys-muted);
 }
 
 .smsys-nav-item {
-    display: block;
-    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    height: var(--smsys-space-10);
+    padding: 0 var(--smsys-space-3);
+    margin: 0 var(--smsys-space-2);
     color: var(--smsys-fg);
     text-decoration: none;
-    border-left: 3px solid transparent;
+    border-radius: var(--smsys-radius-md);
     cursor: pointer;
     user-select: none;
+    transition: background var(--smsys-duration-fast) var(--smsys-ease);
 }
 
 .smsys-nav-item:hover {
@@ -79,9 +199,14 @@
 }
 
 .smsys-nav-item.is-active {
-    background: var(--smsys-hover);
-    border-left-color: var(--smsys-accent);
-    font-weight: 600;
+    background: var(--smsys-sidebar-active-bg);
+    color: var(--smsys-sidebar-active-fg);
+    font-weight: var(--smsys-weight-semibold);
+}
+
+.smsys-nav-item:focus-visible {
+    outline: 2px solid var(--smsys-brand-500);
+    outline-offset: -2px;
 }
 
 /* ----- main ----- */
@@ -94,7 +219,7 @@
 }
 
 .smsys-page {
-    padding: 24px 32px;
+    padding: var(--smsys-space-6) var(--smsys-space-8);
     max-width: 900px;
     margin: 0 auto;
 }
@@ -103,28 +228,49 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 16px;
+    margin-bottom: var(--smsys-space-4);
 }
 
 .smsys-page-title {
-    font-size: 22px;
-    font-weight: 600;
+    font-size: var(--smsys-text-xl);
+    font-weight: var(--smsys-weight-semibold);
     margin: 0;
 }
 
-/* ----- buttons ----- */
+/* ----- buttons -----
+ *
+ * Variants:
+ *   .smsys-btn                — base (outlined, default action)
+ *   .smsys-btn-primary        — filled brand (main CTA)
+ *   .smsys-btn-secondary      — explicit outlined alias of base
+ *   .smsys-btn-ghost          — transparent, no border (inline/tertiary)
+ *   .smsys-btn-danger         — color-only danger modifier
+ *   .smsys-btn-danger-solid   — filled danger (destructive)
+ *
+ * Size modifiers:
+ *   .smsys-btn-sm             — compact (smaller padding + font)
+ */
 .smsys-btn {
-    display: inline-block;
-    padding: 6px 12px;
-    margin: 0 4px 0 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--smsys-space-8);
+    padding: var(--smsys-space-1) var(--smsys-space-3);
+    margin: 0 var(--smsys-space-1) 0 0;
     background: var(--smsys-bg);
     color: var(--smsys-fg);
     border: 1px solid var(--smsys-border);
-    border-radius: 4px;
+    border-radius: var(--smsys-radius-md);
     font: inherit;
+    font-size: var(--smsys-text-base);
     cursor: pointer;
+    transition: background var(--smsys-duration-fast) var(--smsys-ease);
 }
 .smsys-btn:hover { background: var(--smsys-hover); }
+.smsys-btn:focus-visible {
+    outline: 2px solid var(--smsys-brand-500);
+    outline-offset: 2px;
+}
 .smsys-btn:disabled {
     opacity: 0.5;
     cursor: default;
@@ -140,49 +286,82 @@
     filter: brightness(1.1);
 }
 
+.smsys-btn-secondary {
+    background: var(--smsys-bg);
+    color: var(--smsys-fg);
+    border-color: var(--smsys-border);
+}
+.smsys-btn-secondary:hover {
+    background: var(--smsys-hover);
+}
+
+.smsys-btn-ghost {
+    background: transparent;
+    border-color: transparent;
+}
+.smsys-btn-ghost:hover {
+    background: var(--smsys-hover);
+}
+
+.smsys-btn-sm {
+    min-height: auto;
+    padding: 2px var(--smsys-space-2);
+    font-size: var(--smsys-text-sm);
+}
+
 .smsys-btn-danger { color: var(--smsys-danger); }
 
+.smsys-btn-danger-solid {
+    background: var(--smsys-danger);
+    border-color: var(--smsys-danger);
+    color: var(--smsys-accent-fg);
+}
+.smsys-btn-danger-solid:hover { filter: brightness(1.1); }
+
 /* ----- tree (disciplines / subjects) ----- */
-.smsys-tree { margin-top: 8px; }
+.smsys-tree { margin-top: var(--smsys-space-2); }
 
 .smsys-tree-discipline {
-    margin: 8px 0;
+    margin: var(--smsys-space-2) 0;
     border: 1px solid var(--smsys-border);
-    border-radius: 6px;
+    border-radius: var(--smsys-radius-md);
     overflow: hidden;
 }
 
 .smsys-tree-row {
     display: flex;
     align-items: center;
-    padding: 8px 12px;
+    padding: var(--smsys-space-2) var(--smsys-space-3);
     cursor: pointer;
     user-select: none;
 }
 .smsys-tree-row:hover { background: var(--smsys-hover); }
 
 .smsys-tree-row.is-discipline {
-    font-weight: 600;
+    font-weight: var(--smsys-weight-semibold);
     background: var(--smsys-sidebar-bg);
 }
 
-.smsys-tree-row.is-subject { padding-left: 32px; }
-.smsys-tree-row.is-topic   { padding-left: 56px; font-size: 13px; }
+.smsys-tree-row.is-subject { padding-left: var(--smsys-space-8); }
+.smsys-tree-row.is-topic   {
+    padding-left: 56px;
+    font-size: var(--smsys-text-base);
+}
 .smsys-tree-row.is-topic .smsys-tree-name { color: var(--smsys-muted); }
 
 .smsys-tree-children.is-topics {
     background: var(--smsys-sidebar-bg);
 }
 .smsys-tree-children.is-topics .smsys-empty.is-topic-empty {
-    padding: 6px 12px 6px 56px;
-    font-size: 12px;
+    padding: 6px var(--smsys-space-3) 6px 56px;
+    font-size: var(--smsys-text-sm);
     color: var(--smsys-muted);
 }
 
 .smsys-tree-caret {
-    width: 16px;
+    width: var(--smsys-space-4);
     text-align: center;
-    margin-right: 4px;
+    margin-right: var(--smsys-space-1);
     color: var(--smsys-muted);
 }
 
@@ -190,9 +369,9 @@
 
 .smsys-tree-actions {
     display: flex;
-    gap: 4px;
+    gap: var(--smsys-space-1);
     opacity: 0;
-    transition: opacity 0.1s;
+    transition: opacity var(--smsys-duration-micro) var(--smsys-ease);
 }
 .smsys-tree-row:hover .smsys-tree-actions { opacity: 1; }
 
@@ -207,7 +386,7 @@
     cursor: pointer;
     font: inherit;
     padding: 2px 6px;
-    border-radius: 4px;
+    border-radius: var(--smsys-radius-sm);
 }
 .smsys-tree-action:hover {
     background: var(--smsys-bg);
@@ -231,11 +410,11 @@
 
 .smsys-color-dot {
     display: inline-block;
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
+    width: var(--smsys-space-3);
+    height: var(--smsys-space-3);
+    border-radius: var(--smsys-radius-full);
     background: var(--smsys-muted);
-    border: 1.5px solid rgba(0, 0, 0, 0.2);
+    border: 1.5px solid var(--smsys-color-dot-border);
     flex-shrink: 0;
 }
 
@@ -244,16 +423,16 @@
     padding: 1px 7px;
     background: var(--smsys-border);
     color: var(--smsys-muted);
-    border-radius: 10px;
-    font-size: 11px;
-    font-weight: 600;
-    margin-right: 8px;
+    border-radius: var(--smsys-radius-full);
+    font-size: var(--smsys-text-xs);
+    font-weight: var(--smsys-weight-semibold);
+    margin-right: var(--smsys-space-2);
     white-space: nowrap;
 }
 
 .smsys-empty {
     color: var(--smsys-muted);
-    padding: 12px;
+    padding: var(--smsys-space-3);
     text-align: center;
     font-style: italic;
 }
@@ -265,9 +444,9 @@
 }
 
 .smsys-tree-skeleton {
-    margin: 8px 0;
+    margin: var(--smsys-space-2) 0;
     border: 1px solid var(--smsys-border);
-    border-radius: 6px;
+    border-radius: var(--smsys-radius-md);
     height: 38px;
     background: linear-gradient(
         90deg,
@@ -282,24 +461,24 @@
 /* ----- toolbar within a page ----- */
 .smsys-page-actions {
     display: flex;
-    gap: 8px;
-    margin-bottom: 12px;
+    gap: var(--smsys-space-2);
+    margin-bottom: var(--smsys-space-3);
 }
 
 /* ----- toasts (lightweight) ----- */
 .smsys-toast {
     position: fixed;
-    bottom: 24px;
+    bottom: var(--smsys-space-6);
     left: 50%;
     transform: translateX(-50%);
     background: var(--smsys-fg);
     color: var(--smsys-bg);
-    padding: 8px 16px;
-    border-radius: 4px;
+    padding: var(--smsys-space-2) var(--smsys-space-4);
+    border-radius: var(--smsys-radius-sm);
     z-index: 1000;
     pointer-events: none;
     opacity: 0;
-    transition: opacity 0.15s;
+    transition: opacity var(--smsys-duration-fast) var(--smsys-ease);
 }
 .smsys-toast.is-visible { opacity: 0.92; }
 
@@ -309,49 +488,42 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 8px 12px;
+    padding: var(--smsys-space-2) var(--smsys-space-3);
     background: var(--smsys-hover);
     border-top: 1px solid var(--smsys-border);
 }
 
 .smsys-tree > .smsys-inline-form {
     border: 1px solid var(--smsys-border);
-    border-radius: 6px;
+    border-radius: var(--smsys-radius-md);
     border-top-width: 1px;
-    margin: 8px 0;
+    margin: var(--smsys-space-2) 0;
 }
 
 .smsys-inline-input {
     flex: 1;
     min-width: 0;
-    padding: 4px 8px;
+    padding: var(--smsys-space-1) var(--smsys-space-2);
     border: 1px solid var(--smsys-accent);
-    border-radius: 4px;
+    border-radius: var(--smsys-radius-sm);
     background: var(--smsys-bg);
     color: var(--smsys-fg);
     font: inherit;
-    font-size: 13px;
+    font-size: var(--smsys-text-base);
     outline: none;
 }
 
 .smsys-inline-confirm-msg {
     flex: 1;
     color: var(--smsys-danger);
-    font-size: 13px;
+    font-size: var(--smsys-text-base);
 }
-
-.smsys-btn-danger-solid {
-    background: var(--smsys-danger);
-    border-color: var(--smsys-danger);
-    color: #fff;
-}
-.smsys-btn-danger-solid:hover { filter: brightness(1.1); }
 
 /* ----- modal ----- */
 .smsys-modal-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.4);
+    background: var(--smsys-overlay-bg);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -362,53 +534,53 @@
     background: var(--smsys-bg);
     color: var(--smsys-fg);
     border: 1px solid var(--smsys-border);
-    border-radius: 8px;
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+    border-radius: var(--smsys-radius-lg);
+    box-shadow: var(--smsys-shadow-lg);
     width: 420px;
-    max-width: calc(100vw - 32px);
-    padding: 20px 20px 16px;
+    max-width: calc(100vw - var(--smsys-space-8));
+    padding: var(--smsys-space-5) var(--smsys-space-5) var(--smsys-space-4);
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: var(--smsys-space-3);
 }
 
 .smsys-modal-title {
-    font-size: 16px;
-    font-weight: 600;
+    font-size: var(--smsys-text-lg);
+    font-weight: var(--smsys-weight-semibold);
     margin: 0;
 }
 
 .smsys-modal-status {
     color: var(--smsys-muted);
-    font-size: 13px;
+    font-size: var(--smsys-text-base);
     margin: 0;
 }
 
 .smsys-modal-label {
-    font-size: 12px;
-    font-weight: 600;
+    font-size: var(--smsys-text-sm);
+    font-weight: var(--smsys-weight-semibold);
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--smsys-muted);
-    margin-top: 4px;
+    margin-top: var(--smsys-space-1);
 }
 
 .smsys-modal-select {
     width: 100%;
-    padding: 6px 8px;
+    padding: 6px var(--smsys-space-2);
     background: var(--smsys-bg);
     color: var(--smsys-fg);
     border: 1px solid var(--smsys-border);
-    border-radius: 4px;
+    border-radius: var(--smsys-radius-sm);
     font: inherit;
-    font-size: 13px;
+    font-size: var(--smsys-text-base);
 }
 
 .smsys-modal-actions {
     display: flex;
     justify-content: flex-end;
     gap: 6px;
-    margin-top: 8px;
+    margin-top: var(--smsys-space-2);
 }
 
 /* ----- per-subject card stats strip ----- */
@@ -416,12 +588,12 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 1px 8px;
+    padding: 1px var(--smsys-space-2);
     background: var(--smsys-border);
-    border-radius: 10px;
-    font-size: 11px;
-    font-weight: 600;
-    margin-right: 8px;
+    border-radius: var(--smsys-radius-full);
+    font-size: var(--smsys-text-xs);
+    font-weight: var(--smsys-weight-semibold);
+    margin-right: var(--smsys-space-2);
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
 }
@@ -444,29 +616,29 @@
 
 /* ----- dashboard ----- */
 .smsys-section-heading {
-    font-size: 13px;
-    font-weight: 700;
+    font-size: var(--smsys-text-sm);
+    font-weight: var(--smsys-weight-bold);
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: var(--smsys-muted);
-    margin: 0 0 10px;
+    margin: 0 0 var(--smsys-space-2);
 }
 
 .smsys-stat-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 10px;
-    margin-bottom: 28px;
+    gap: var(--smsys-space-2);
+    margin-bottom: var(--smsys-space-8);
 }
 
 .smsys-stat-tile {
     background: var(--smsys-sidebar-bg);
     border: 1px solid var(--smsys-border);
-    border-radius: 8px;
-    padding: 16px 20px;
+    border-radius: var(--smsys-radius-lg);
+    padding: var(--smsys-space-4) var(--smsys-space-5);
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--smsys-space-1);
 }
 
 .smsys-stat-tile.is-skeleton {
@@ -482,15 +654,15 @@
 }
 
 .smsys-stat-tile-value {
-    font-size: 28px;
-    font-weight: 700;
-    line-height: 1;
+    font-size: var(--smsys-text-2xl);
+    font-weight: var(--smsys-weight-bold);
+    line-height: var(--smsys-leading-tight);
     font-variant-numeric: tabular-nums;
 }
 
 .smsys-stat-tile-label {
-    font-size: 11px;
-    font-weight: 600;
+    font-size: var(--smsys-text-xs);
+    font-weight: var(--smsys-weight-semibold);
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--smsys-muted);
@@ -500,18 +672,18 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
-    margin-bottom: 16px;
+    margin-bottom: var(--smsys-space-4);
 }
 
 .smsys-due-row {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 10px 14px;
+    gap: var(--smsys-space-2);
+    padding: var(--smsys-space-2) var(--smsys-space-3);
     background: var(--smsys-sidebar-bg);
     border: 1px solid var(--smsys-border);
-    border-radius: 6px;
-    transition: background 0.1s;
+    border-radius: var(--smsys-radius-md);
+    transition: background var(--smsys-duration-fast) var(--smsys-ease);
 }
 
 .smsys-due-row:hover { background: var(--smsys-hover); }
@@ -546,15 +718,15 @@
 }
 
 .smsys-due-subject {
-    font-weight: 600;
-    font-size: 14px;
+    font-weight: var(--smsys-weight-semibold);
+    font-size: var(--smsys-text-base);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
 .smsys-due-discipline {
-    font-size: 11px;
+    font-size: var(--smsys-text-xs);
     color: var(--smsys-muted);
     white-space: nowrap;
     overflow: hidden;
@@ -568,8 +740,8 @@
     color: var(--smsys-muted);
     padding: 0 6px 0 0;
     opacity: 0.3;
-    transition: opacity 0.1s;
-    font-size: 15px;
+    transition: opacity var(--smsys-duration-micro) var(--smsys-ease);
+    font-size: var(--smsys-text-base);
     line-height: 1;
     user-select: none;
     flex-shrink: 0;
@@ -591,46 +763,40 @@
 
 /* Modal hint text below the topic/subject pickers */
 .smsys-modal-hint {
-    margin: 8px 0 0;
-    font-size: 12px;
+    margin: var(--smsys-space-2) 0 0;
+    font-size: var(--smsys-text-sm);
     color: var(--smsys-muted);
     font-style: italic;
 }
 
 /* ----- filter / search bar ----- */
 .smsys-filter-bar {
-    margin-bottom: 12px;
+    margin-bottom: var(--smsys-space-3);
 }
 
 .smsys-filter-input {
     width: 100%;
     max-width: 600px;
-    padding: 6px 10px;
+    padding: 6px var(--smsys-space-2);
     border: 1px solid var(--smsys-border);
-    border-radius: 4px;
+    border-radius: var(--smsys-radius-sm);
     background: var(--smsys-bg);
     color: var(--smsys-fg);
     font: inherit;
-    font-size: 13px;
+    font-size: var(--smsys-text-base);
     outline: none;
 }
 .smsys-filter-input:focus {
     border-color: var(--smsys-accent);
-    box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.15);
-}
-.night-mode .smsys-filter-input:focus {
-    box-shadow: 0 0 0 2px rgba(78, 163, 255, 0.18);
+    box-shadow: 0 0 0 2px var(--smsys-focus-ring-bg);
 }
 
 /* ----- match highlight ----- */
 mark.smsys-highlight {
-    background: rgba(13, 110, 253, 0.18);
+    background: var(--smsys-highlight-bg);
     color: inherit;
     border-radius: 2px;
     padding: 0 1px;
-}
-.night-mode mark.smsys-highlight {
-    background: rgba(78, 163, 255, 0.22);
 }
 
 /* ----- status dot (tree indicator) ----- */
