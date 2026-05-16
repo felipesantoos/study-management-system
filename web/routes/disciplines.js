@@ -1321,14 +1321,27 @@ function showInlineConfirm(insert, { message, onConfirm, onCancel }) {
     const widget = h(".smsys-inline-confirm", null,
         h("span.smsys-inline-confirm-msg", message),
         h("button.smsys-btn.smsys-btn-danger-solid", {
-            onClick: () => { widget.remove(); onConfirm(); }
+            onClick: () => { teardown(); onConfirm(); }
         }, "Delete"),
         h("button.smsys-btn", {
-            onClick: () => { widget.remove(); if (onCancel) onCancel(); }
+            onClick: () => { teardown(); if (onCancel) onCancel(); }
         }, "Cancel"),
     );
 
+    function teardown() {
+        widget.remove();
+        document.removeEventListener("keydown", onKey, true);
+    }
+
+    function onKey(e) {
+        if (e.key !== "Escape") return;
+        e.preventDefault();
+        teardown();
+        if (onCancel) onCancel();
+    }
+
     insert(widget);
+    document.addEventListener("keydown", onKey, true);
 }
 
 // ============================================================
