@@ -430,7 +430,7 @@ export async function render(container) {
 
             if (noFilters) {
                 dWrap.style.display = "";
-                const wasCollapsed = dKey && localStorage.getItem(dKey) === "1";
+                const wasCollapsed = !dKey || localStorage.getItem(dKey) !== "0";
                 if (dChildren) dChildren.style.display = wasCollapsed ? "none" : "";
                 if (dCaret) dCaret.classList.toggle("is-open", !wasCollapsed);
                 if (dChildren) {
@@ -585,7 +585,8 @@ async function renderDiscipline(d, refreshAll) {
 
     const storageKey = `smsys_discipline_collapsed_${d.id}`;
     wrap.dataset.storageKey = storageKey;
-    const startCollapsed = localStorage.getItem(storageKey) === "1";
+    // Default collapsed (like subjects). "0" means user explicitly opened it.
+    const startCollapsed = localStorage.getItem(storageKey) !== "0";
 
     const caretEl = makeCaret(!startCollapsed);
     if (startCollapsed) childrenEl.style.display = "none";
