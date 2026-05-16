@@ -30,6 +30,7 @@ def _row_to_discipline(row: sqlite3.Row) -> dict[str, Any]:
         "name": row["name"],
         "color": row["color"],
         "position": int(row["position"]),
+        "note_count": int(row["note_count"]),
     }
 
 

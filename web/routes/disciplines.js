@@ -458,6 +458,7 @@ async function renderDiscipline(d, refreshAll) {
         dragHandle,
         caretEl,
         h("span.smsys-tree-name", d.name),
+        h("span.smsys-badge", `${d.note_count} notes`),
         h(".smsys-tree-actions", null,
             h("button.smsys-tree-action",
                 {
