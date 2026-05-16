@@ -63,8 +63,22 @@ async function renderDiscipline(d, refreshAll) {
     const wrap = h(".smsys-tree-discipline");
     const childrenEl = h(".smsys-tree-children");
 
-    const headerRow = h(".smsys-tree-row.is-discipline", null,
-        h("span.smsys-tree-caret", "▾"),
+    const storageKey = `smsys_discipline_collapsed_${d.id}`;
+    const startCollapsed = localStorage.getItem(storageKey) === "1";
+
+    const caretEl = h("span.smsys-tree-caret", startCollapsed ? "▸" : "▾");
+    if (startCollapsed) childrenEl.style.display = "none";
+
+    function toggleCollapse(e) {
+        e.stopPropagation();
+        const collapsed = childrenEl.style.display === "none";
+        childrenEl.style.display = collapsed ? "" : "none";
+        caretEl.textContent = collapsed ? "▾" : "▸";
+        localStorage.setItem(storageKey, collapsed ? "0" : "1");
+    }
+
+    const headerRow = h(".smsys-tree-row.is-discipline", { onClick: toggleCollapse },
+        caretEl,
         h("span.smsys-tree-name", d.name),
         h(".smsys-tree-actions", null,
             h("button.smsys-tree-action",
