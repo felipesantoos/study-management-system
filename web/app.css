@@ -884,6 +884,14 @@ mark.smsys-highlight {
     padding: 4px;
     min-width: 230px;
 }
+/* Picker holds focus while open so SRs observe aria-activedescendant updates.
+   The active option's .is-focused styling already conveys keyboard position;
+   the listbox itself doesn't need a competing focus ring on top of its border
+   and shadow. */
+.smsys-status-picker:focus,
+.smsys-status-picker:focus-visible {
+    outline: none;
+}
 
 .smsys-status-option {
     display: grid;

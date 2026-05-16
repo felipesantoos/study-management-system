@@ -20,6 +20,7 @@ export function statusLabel(slug) {
 }
 
 let activePicker = null;
+let pickerInstanceCounter = 0;
 
 export function closeStatusPicker({ restoreFocus = true } = {}) {
     if (!activePicker) return;
@@ -30,6 +31,7 @@ export function closeStatusPicker({ restoreFocus = true } = {}) {
     activePicker = null;
     if (triggerEl) {
         triggerEl.setAttribute("aria-expanded", "false");
+        triggerEl.removeAttribute("aria-controls");
         if (restoreFocus && typeof triggerEl.focus === "function") {
             triggerEl.focus();
         }
@@ -42,8 +44,14 @@ export function openStatusPicker(triggerEl, nodeId, nodeType) {
     const currentStatus = triggerEl.dataset.status || "backlog";
     const options = [];
 
+    const pickerId = `smsys-status-picker-${++pickerInstanceCounter}`;
+    // tabindex=-1 lets us move browser focus onto the listbox programmatically
+    // so screen readers observe aria-activedescendant updates inside it. The
+    // trigger gets aria-controls so AT can follow the relationship.
     const pickerEl = h("div.smsys-status-picker", {
+        id: pickerId,
         role: "listbox",
+        tabindex: "-1",
         "aria-label": "Change status",
     });
 
@@ -79,9 +87,11 @@ export function openStatusPicker(triggerEl, nodeId, nodeType) {
     document.body.appendChild(pickerEl);
     positionPicker(pickerEl, triggerEl);
     triggerEl.setAttribute("aria-expanded", "true");
+    triggerEl.setAttribute("aria-controls", pickerId);
 
     const initialIndex = Math.max(0, options.findIndex(o => o.classList.contains("is-current")));
     setFocusedIndex(initialIndex);
+    pickerEl.focus();
 
     function setFocusedOption(el) {
         for (const o of options) o.classList.remove("is-focused");
@@ -162,9 +172,11 @@ export function openStatusPicker(triggerEl, nodeId, nodeType) {
                 closeStatusPicker();
                 break;
             case "Tab":
-                // Let the browser advance focus naturally to the next/prev tabbable element.
-                // Don't refocus the trigger — that would block Tab from leaving the status control.
-                closeStatusPicker({ restoreFocus: false });
+                // Picker holds focus while open. Closing with restoreFocus: true
+                // moves focus back to the trigger before the browser processes
+                // Tab's default action — so the default then advances from the
+                // trigger to the next/prev tabbable element, not from <body>.
+                closeStatusPicker({ restoreFocus: true });
                 break;
         }
     }
