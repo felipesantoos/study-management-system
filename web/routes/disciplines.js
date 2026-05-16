@@ -3,6 +3,65 @@ import { invoke, toast } from "../lib/bridge.js";
 import { openStatusPicker, statusLabel } from "../lib/status-picker.js";
 import { emptyState, EMPTY_ICONS } from "../lib/empty-state.js";
 
+// Inline SVG icons for action buttons (12×12, stroke-based, currentColor).
+// Each name maps to the geometry for one recognizable glyph. Play uses fill
+// because a solid triangle reads better than a stroked outline at small sizes.
+function makeActionIcon(name) {
+    const NS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("viewBox", "0 0 16 16");
+    svg.setAttribute("width", "12");
+    svg.setAttribute("height", "12");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("focusable", "false");
+    svg.style.flexShrink = "0";
+
+    function stroke(d) {
+        const p = document.createElementNS(NS, "path");
+        p.setAttribute("d", d);
+        p.setAttribute("fill", "none");
+        p.setAttribute("stroke", "currentColor");
+        p.setAttribute("stroke-width", "1.6");
+        p.setAttribute("stroke-linecap", "round");
+        p.setAttribute("stroke-linejoin", "round");
+        svg.appendChild(p);
+    }
+    function fill(d) {
+        const p = document.createElementNS(NS, "path");
+        p.setAttribute("d", d);
+        p.setAttribute("fill", "currentColor");
+        svg.appendChild(p);
+    }
+    function circle(cx, cy, r) {
+        const c = document.createElementNS(NS, "circle");
+        c.setAttribute("cx", String(cx));
+        c.setAttribute("cy", String(cy));
+        c.setAttribute("r", String(r));
+        c.setAttribute("fill", "none");
+        c.setAttribute("stroke", "currentColor");
+        c.setAttribute("stroke-width", "1.6");
+        svg.appendChild(c);
+    }
+
+    switch (name) {
+        case "up":          stroke("M4 10.5L8 6l4 4.5"); break;
+        case "down":        stroke("M4 5.5L8 10l4-4.5"); break;
+        case "play":        fill("M5 2.5L13.5 8 5 13.5z"); break;
+        case "eye":
+            stroke("M1 8C3 3.5 5.5 2 8 2s5 1.5 7 6c-2 4.5-4.5 6-7 6S3 12.5 1 8z");
+            circle(8, 8, 2.5);
+            break;
+        case "file":        stroke("M4 2h6l4 4v10H4V2zm6 0v4h4"); break;
+        case "plus":        stroke("M8 3v10M3 8h10"); break;
+        case "pencil":      stroke("M11.5 2.5a1.5 1.5 0 0 1 2 2L5.5 12.5l-3 .5.5-3z"); break;
+        case "trash":       stroke("M3 5h10M6 5V3.5h4V5M4.5 5l.5 9.5h7L12.5 5M7 8v4M9 8v4"); break;
+        case "arrow-right": stroke("M3 8h10M9 4l4 4-4 4"); break;
+        case "droplet":     stroke("M8 1.5L4.5 8.5C4.5 12 6 14.5 8 14.5s3.5-2.5 3.5-6z"); break;
+    }
+
+    return svg;
+}
+
 // Inline SVG chevron used as the expand/collapse indicator. Rotates 90° via
 // CSS when the .is-open class is set. Right-pointing in the closed state so
 // the rotation animates around the natural visual anchor.
@@ -682,7 +741,7 @@ async function renderDiscipline(d, refreshAll) {
             "aria-label": `Change color of ${d.name}`,
             onClick: (e) => { e.stopPropagation(); colorInput.click(); },
         },
-        "color"
+        makeActionIcon("droplet"), "Color"
     );
     swatchBtn.appendChild(colorInput);
 
@@ -719,7 +778,7 @@ async function renderDiscipline(d, refreshAll) {
                         }
                     }
                 },
-                "↑"
+                makeActionIcon("up"), "Up"
             ),
             h("button.smsys-tree-action",
                 {
@@ -735,38 +794,38 @@ async function renderDiscipline(d, refreshAll) {
                         }
                     }
                 },
-                "↓"
+                makeActionIcon("down"), "Down"
             ),
             swatchBtn,
             h("button.smsys-tree-action.smsys-tree-action--study",
                 { title: "Study every note under this discipline",
                   "aria-label": `Study every note under ${d.name}`,
                   onClick: (e) => { e.stopPropagation(); onStudyDiscipline(d); } },
-                "study"
+                makeActionIcon("play"), "Study"
             ),
             h("button.smsys-tree-action",
                 { title: "Show every note under this discipline in Browser",
                   "aria-label": `Show notes under ${d.name} in Browser`,
                   onClick: (e) => { e.stopPropagation(); onShowDisciplineNotes(d); } },
-                "show notes"
+                makeActionIcon("eye"), "Notes"
             ),
             h("button.smsys-tree-action",
                 { title: "Add subject",
                   "aria-label": `Add subject to ${d.name}`,
                   onClick: (e) => { e.stopPropagation(); onAddSubject(d, childrenEl, refreshAll); } },
-                "+ subject"
+                makeActionIcon("plus"), "Subject"
             ),
             h("button.smsys-tree-action",
                 { title: "Rename",
                   "aria-label": `Rename ${d.name}`,
                   onClick: (e) => { e.stopPropagation(); onRenameDiscipline(d, headerRow, refreshAll); } },
-                "rename"
+                makeActionIcon("pencil"), "Rename"
             ),
             h("button.smsys-tree-action.smsys-btn-danger",
                 { title: "Delete",
                   "aria-label": `Delete ${d.name}`,
                   onClick: (e) => { e.stopPropagation(); onDeleteDiscipline(d, headerRow, refreshAll); } },
-                "delete"
+                makeActionIcon("trash"), "Delete"
             ),
         )
     );
@@ -876,7 +935,7 @@ async function renderSubject(s, disciplineId, siblingContainer, refreshAll, stat
                         }
                     }
                 },
-                "↑"
+                makeActionIcon("up"), "Up"
             ),
             h("button.smsys-tree-action",
                 {
@@ -892,43 +951,43 @@ async function renderSubject(s, disciplineId, siblingContainer, refreshAll, stat
                         }
                     }
                 },
-                "↓"
+                makeActionIcon("down"), "Down"
             ),
             h("button.smsys-tree-action.smsys-tree-action--study",
                 { title: "Start a study session for this subject (incl. its topics)",
                   "aria-label": `Study ${s.name} and its topics`,
                   onClick: (e) => { e.stopPropagation(); onStudySubject(s); } },
-                "study"
+                makeActionIcon("play"), "Study"
             ),
             h("button.smsys-tree-action",
                 { title: "Show notes in Browser",
                   "aria-label": `Show notes under ${s.name} in Browser`,
                   onClick: (e) => { e.stopPropagation(); onShowSubjectNotes(s); } },
-                "show notes"
+                makeActionIcon("eye"), "Notes"
             ),
             h("button.smsys-tree-action",
                 { title: "Add topic",
                   "aria-label": `Add topic to ${s.name}`,
                   onClick: (e) => { e.stopPropagation(); onAddTopic(s, topicsEl, refreshAll); } },
-                "+ topic"
+                makeActionIcon("plus"), "Topic"
             ),
             h("button.smsys-tree-action",
                 { title: "Move all notes to another placement",
                   "aria-label": `Move all notes from ${s.name} elsewhere`,
                   onClick: (e) => { e.stopPropagation(); onMoveAllNotes("subject", s, refreshAll); } },
-                "move all"
+                makeActionIcon("arrow-right"), "Move"
             ),
             h("button.smsys-tree-action",
                 { title: "Rename",
                   "aria-label": `Rename ${s.name}`,
                   onClick: (e) => { e.stopPropagation(); onRenameSubject(s, row, refreshAll); } },
-                "rename"
+                makeActionIcon("pencil"), "Rename"
             ),
             h("button.smsys-tree-action.smsys-btn-danger",
                 { title: "Delete",
                   "aria-label": `Delete ${s.name}`,
                   onClick: (e) => { e.stopPropagation(); onDeleteSubject(s, row, refreshAll); } },
-                "delete"
+                makeActionIcon("trash"), "Delete"
             ),
         )
     );
@@ -992,7 +1051,7 @@ async function loadTopics(subjectId, container, refreshAll) {
                             }
                         }
                     },
-                    "↑"
+                    makeActionIcon("up"), "Up"
                 ),
                 h("button.smsys-tree-action",
                     {
@@ -1007,37 +1066,37 @@ async function loadTopics(subjectId, container, refreshAll) {
                             }
                         }
                     },
-                    "↓"
+                    makeActionIcon("down"), "Down"
                 ),
                 h("button.smsys-tree-action.smsys-tree-action--study",
                     { title: "Start a study session for this topic",
                       "aria-label": `Study ${t.name}`,
                       onClick: () => onStudyTopic(t) },
-                    "study"
+                    makeActionIcon("play"), "Study"
                 ),
                 h("button.smsys-tree-action",
                     { title: "Show notes in Browser",
                       "aria-label": `Show notes under ${t.name} in Browser`,
                       onClick: () => onShowTopicNotes(t) },
-                    "show notes"
+                    makeActionIcon("eye"), "Notes"
                 ),
                 h("button.smsys-tree-action",
                     { title: "Move all notes to another placement",
                       "aria-label": `Move all notes from ${t.name} elsewhere`,
                       onClick: () => onMoveAllNotes("topic", t, refreshAll) },
-                    "move all"
+                    makeActionIcon("arrow-right"), "Move"
                 ),
                 h("button.smsys-tree-action",
                     { title: "Rename",
                       "aria-label": `Rename ${t.name}`,
                       onClick: () => onRenameTopic(t, row, refreshAll) },
-                    "rename"
+                    makeActionIcon("pencil"), "Rename"
                 ),
                 h("button.smsys-tree-action.smsys-btn-danger",
                     { title: "Delete",
                       "aria-label": `Delete ${t.name}`,
                       onClick: () => onDeleteTopic(t, row, refreshAll) },
-                    "delete"
+                    makeActionIcon("trash"), "Delete"
                 ),
             )
         );
