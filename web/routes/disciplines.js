@@ -50,16 +50,23 @@ export async function render(container) {
 
     await refresh();
 
-    async function onNewDiscipline() {
-        const name = window.prompt("New discipline name:");
-        if (!name || !name.trim()) return;
-        try {
-            await invoke("disciplines.create", { name });
-            toast("Discipline created.");
-            await refresh();
-        } catch (e) {
-            toast(e.message, { error: true });
-        }
+    function onNewDiscipline() {
+        dismissActiveInline();
+        showInlineInput(
+            el => treeEl.insertBefore(el, treeEl.firstChild),
+            {
+                placeholder: "New discipline name",
+                async onConfirm(name) {
+                    try {
+                        await invoke("disciplines.create", { name });
+                        toast("Discipline created.");
+                        await refresh();
+                    } catch (e) {
+                        toast(e.message, { error: true });
+                    }
+                }
+            }
+        );
     }
 }
 
@@ -90,11 +97,11 @@ async function renderDiscipline(d, refreshAll) {
                 "+ subject"
             ),
             h("button.smsys-tree-action",
-                { title: "Rename", onClick: (e) => { e.stopPropagation(); onRenameDiscipline(d, refreshAll); } },
+                { title: "Rename", onClick: (e) => { e.stopPropagation(); onRenameDiscipline(d, headerRow, refreshAll); } },
                 "rename"
             ),
             h("button.smsys-tree-action.smsys-btn-danger",
-                { title: "Delete", onClick: (e) => { e.stopPropagation(); onDeleteDiscipline(d, refreshAll); } },
+                { title: "Delete", onClick: (e) => { e.stopPropagation(); onDeleteDiscipline(d, headerRow, refreshAll); } },
                 "delete"
             ),
         )
@@ -120,92 +127,127 @@ async function loadSubjects(disciplineId, container, refreshAll) {
         return;
     }
     for (const s of subjects) {
-        container.appendChild(
-            h(".smsys-tree-row.is-subject", null,
-                h("span.smsys-tree-name", s.name),
-                h(".smsys-tree-actions", null,
-                    h("button.smsys-tree-action",
-                        { title: "Show notes in Browser",
-                          onClick: () => onShowNotes(s) },
-                        "show notes"
-                    ),
-                    h("button.smsys-tree-action",
-                        { title: "Rename",
-                          onClick: () => onRenameSubject(s, refreshAll) },
-                        "rename"
-                    ),
-                    h("button.smsys-tree-action.smsys-btn-danger",
-                        { title: "Delete",
-                          onClick: () => onDeleteSubject(s, refreshAll) },
-                        "delete"
-                    ),
-                )
+        const row = h(".smsys-tree-row.is-subject", null,
+            h("span.smsys-tree-name", s.name),
+            h(".smsys-tree-actions", null,
+                h("button.smsys-tree-action",
+                    { title: "Show notes in Browser",
+                      onClick: () => onShowNotes(s) },
+                    "show notes"
+                ),
+                h("button.smsys-tree-action",
+                    { title: "Rename",
+                      onClick: () => onRenameSubject(s, row, refreshAll) },
+                    "rename"
+                ),
+                h("button.smsys-tree-action.smsys-btn-danger",
+                    { title: "Delete",
+                      onClick: () => onDeleteSubject(s, row, refreshAll) },
+                    "delete"
+                ),
             )
         );
+        container.appendChild(row);
     }
 }
 
-async function onAddSubject(d, childrenEl, refreshAll) {
-    const name = window.prompt(`New subject under "${d.name}":`);
-    if (!name || !name.trim()) return;
-    try {
-        await invoke("subjects.create", { discipline_id: d.id, name });
-        toast("Subject created.");
-        await loadSubjects(d.id, childrenEl, refreshAll);
-    } catch (e) {
-        toast(e.message, { error: true });
-    }
+function onAddSubject(d, childrenEl, refreshAll) {
+    dismissActiveInline();
+    showInlineInput(
+        el => childrenEl.insertBefore(el, childrenEl.firstChild),
+        {
+            placeholder: `New subject under "${d.name}"`,
+            async onConfirm(name) {
+                try {
+                    await invoke("subjects.create", { discipline_id: d.id, name });
+                    toast("Subject created.");
+                    await loadSubjects(d.id, childrenEl, refreshAll);
+                } catch (e) {
+                    toast(e.message, { error: true });
+                }
+            }
+        }
+    );
 }
 
-async function onRenameDiscipline(d, refreshAll) {
-    const name = window.prompt("Rename discipline:", d.name);
-    if (!name || !name.trim() || name === d.name) return;
-    try {
-        await invoke("disciplines.rename", { id: d.id, name });
-        toast("Renamed.");
-        await refreshAll();
-    } catch (e) {
-        toast(e.message, { error: true });
-    }
+function onRenameDiscipline(d, anchorEl, refreshAll) {
+    dismissActiveInline();
+    showInlineInput(
+        el => anchorEl.after(el),
+        {
+            defaultValue: d.name,
+            placeholder: "Discipline name",
+            async onConfirm(name) {
+                if (name === d.name) return;
+                try {
+                    await invoke("disciplines.rename", { id: d.id, name });
+                    toast("Renamed.");
+                    await refreshAll();
+                } catch (e) {
+                    toast(e.message, { error: true });
+                }
+            }
+        }
+    );
 }
 
-async function onDeleteDiscipline(d, refreshAll) {
-    if (!window.confirm(
-        `Delete the discipline "${d.name}"?\n\n` +
-        "All its subjects and note assignments will be removed."
-    )) return;
-    try {
-        await invoke("disciplines.delete", { id: d.id });
-        toast("Deleted.");
-        await refreshAll();
-    } catch (e) {
-        toast(e.message, { error: true });
-    }
+function onDeleteDiscipline(d, anchorEl, refreshAll) {
+    dismissActiveInline();
+    showInlineConfirm(
+        el => anchorEl.after(el),
+        {
+            message: `Delete "${d.name}" and all its subjects?`,
+            async onConfirm() {
+                try {
+                    await invoke("disciplines.delete", { id: d.id });
+                    toast("Deleted.");
+                    await refreshAll();
+                } catch (e) {
+                    toast(e.message, { error: true });
+                }
+            }
+        }
+    );
 }
 
-async function onRenameSubject(s, refreshAll) {
-    const name = window.prompt("Rename subject:", s.name);
-    if (!name || !name.trim() || name === s.name) return;
-    try {
-        await invoke("subjects.rename", { id: s.id, name });
-        toast("Renamed.");
-        await refreshAll();
-    } catch (e) {
-        toast(e.message, { error: true });
-    }
+function onRenameSubject(s, anchorEl, refreshAll) {
+    dismissActiveInline();
+    showInlineInput(
+        el => anchorEl.after(el),
+        {
+            defaultValue: s.name,
+            placeholder: "Subject name",
+            async onConfirm(name) {
+                if (name === s.name) return;
+                try {
+                    await invoke("subjects.rename", { id: s.id, name });
+                    toast("Renamed.");
+                    await refreshAll();
+                } catch (e) {
+                    toast(e.message, { error: true });
+                }
+            }
+        }
+    );
 }
 
-async function onDeleteSubject(s, refreshAll) {
-    if (!window.confirm(
-        `Delete the subject "${s.name}"?\n\nNote assignments to it will be cleared.`
-    )) return;
-    try {
-        await invoke("subjects.delete", { id: s.id });
-        toast("Deleted.");
-        await refreshAll();
-    } catch (e) {
-        toast(e.message, { error: true });
-    }
+function onDeleteSubject(s, anchorEl, refreshAll) {
+    dismissActiveInline();
+    showInlineConfirm(
+        el => anchorEl.after(el),
+        {
+            message: `Delete subject "${s.name}"? Note assignments will be cleared.`,
+            async onConfirm() {
+                try {
+                    await invoke("subjects.delete", { id: s.id });
+                    toast("Deleted.");
+                    await refreshAll();
+                } catch (e) {
+                    toast(e.message, { error: true });
+                }
+            }
+        }
+    );
 }
 
 async function onShowNotes(s) {
@@ -219,4 +261,58 @@ async function onShowNotes(s) {
     } catch (e) {
         toast(e.message, { error: true });
     }
+}
+
+function dismissActiveInline() {
+    document.querySelectorAll(".smsys-inline-form, .smsys-inline-confirm")
+        .forEach(el => el.remove());
+}
+
+function showInlineInput(insert, { defaultValue = "", placeholder = "Name", onConfirm, onCancel }) {
+    const input = h("input.smsys-inline-input", {
+        type: "text",
+        value: defaultValue,
+        placeholder,
+    });
+
+    const widget = h(".smsys-inline-form", null,
+        input,
+        h("button.smsys-btn.smsys-btn-primary", { onClick: commit }, "Save"),
+        h("button.smsys-btn", { onClick: dismiss }, "Cancel"),
+    );
+
+    insert(widget);
+    input.focus();
+    input.select();
+
+    function commit() {
+        const val = input.value.trim();
+        if (!val) { input.focus(); return; }
+        widget.remove();
+        onConfirm(val);
+    }
+
+    function dismiss() {
+        widget.remove();
+        if (onCancel) onCancel();
+    }
+
+    input.addEventListener("keydown", e => {
+        if (e.key === "Enter") { e.preventDefault(); commit(); }
+        if (e.key === "Escape") dismiss();
+    });
+}
+
+function showInlineConfirm(insert, { message, onConfirm, onCancel }) {
+    const widget = h(".smsys-inline-confirm", null,
+        h("span.smsys-inline-confirm-msg", message),
+        h("button.smsys-btn.smsys-btn-danger-solid", {
+            onClick: () => { widget.remove(); onConfirm(); }
+        }, "Delete"),
+        h("button.smsys-btn", {
+            onClick: () => { widget.remove(); if (onCancel) onCancel(); }
+        }, "Cancel"),
+    );
+
+    insert(widget);
 }

@@ -238,3 +238,47 @@
     transition: opacity 0.15s;
 }
 .smsys-toast.is-visible { opacity: 0.92; }
+
+/* ----- inline forms / confirms (replaces window.prompt / window.confirm) ----- */
+.smsys-inline-form,
+.smsys-inline-confirm {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: var(--smsys-hover);
+    border-top: 1px solid var(--smsys-border);
+}
+
+.smsys-tree > .smsys-inline-form {
+    border: 1px solid var(--smsys-border);
+    border-radius: 6px;
+    border-top-width: 1px;
+    margin: 8px 0;
+}
+
+.smsys-inline-input {
+    flex: 1;
+    min-width: 0;
+    padding: 4px 8px;
+    border: 1px solid var(--smsys-accent);
+    border-radius: 4px;
+    background: var(--smsys-bg);
+    color: var(--smsys-fg);
+    font: inherit;
+    font-size: 13px;
+    outline: none;
+}
+
+.smsys-inline-confirm-msg {
+    flex: 1;
+    color: var(--smsys-danger);
+    font-size: 13px;
+}
+
+.smsys-btn-danger-solid {
+    background: var(--smsys-danger);
+    border-color: var(--smsys-danger);
+    color: #fff;
+}
+.smsys-btn-danger-solid:hover { filter: brightness(1.1); }
