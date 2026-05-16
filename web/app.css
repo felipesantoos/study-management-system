@@ -417,6 +417,126 @@
 .smsys-stat.is-new { color: var(--smsys-stat-new); }
 .smsys-stat.is-lrn { color: var(--smsys-stat-lrn); }
 
+/* ----- dashboard ----- */
+.smsys-section-heading {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--smsys-muted);
+    margin: 0 0 10px;
+}
+
+.smsys-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 28px;
+}
+
+.smsys-stat-tile {
+    background: var(--smsys-sidebar-bg);
+    border: 1px solid var(--smsys-border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.smsys-stat-tile.is-skeleton {
+    height: 68px;
+    background: linear-gradient(
+        90deg,
+        var(--smsys-sidebar-bg) 25%,
+        var(--smsys-hover)      50%,
+        var(--smsys-sidebar-bg) 75%
+    );
+    background-size: 200% 100%;
+    animation: smsys-shimmer 1.2s ease-in-out infinite;
+}
+
+.smsys-stat-tile-value {
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+
+.smsys-stat-tile-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--smsys-muted);
+}
+
+.smsys-due-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 16px;
+}
+
+.smsys-due-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--smsys-sidebar-bg);
+    border: 1px solid var(--smsys-border);
+    border-radius: 6px;
+    transition: background 0.1s;
+}
+
+.smsys-due-row:hover { background: var(--smsys-hover); }
+
+.smsys-due-row.is-top {
+    border-color: var(--smsys-accent);
+}
+
+.smsys-due-row.is-skeleton {
+    height: 56px;
+    background: linear-gradient(
+        90deg,
+        var(--smsys-sidebar-bg) 25%,
+        var(--smsys-hover)      50%,
+        var(--smsys-sidebar-bg) 75%
+    );
+    background-size: 200% 100%;
+    animation: smsys-shimmer 1.2s ease-in-out infinite;
+}
+
+.smsys-due-accent {
+    width: 3px;
+    height: 28px;
+    border-radius: 2px;
+    background: var(--smsys-muted);
+    flex-shrink: 0;
+}
+
+.smsys-due-names {
+    flex: 1;
+    min-width: 0;
+}
+
+.smsys-due-subject {
+    font-weight: 600;
+    font-size: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.smsys-due-discipline {
+    font-size: 11px;
+    color: var(--smsys-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 1px;
+}
+
 /* ----- drag-and-drop reordering ----- */
 .smsys-drag-handle {
     cursor: grab;
