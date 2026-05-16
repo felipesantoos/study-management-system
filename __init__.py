@@ -30,6 +30,7 @@ from aqt.utils import showInfo, tooltip
 
 from . import api as _api  # noqa: F401 — imported for handler registration
 from . import bridge
+from . import tagsync as _tagsync  # noqa: F401 — seeds config cache + hot-reload hook
 from .db import close_db, db
 from .dialogs import AssignDialog
 
