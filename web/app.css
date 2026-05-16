@@ -187,6 +187,18 @@
     color: var(--smsys-fg);
 }
 
+.smsys-badge {
+    display: inline-block;
+    padding: 1px 7px;
+    background: var(--smsys-border);
+    color: var(--smsys-muted);
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-right: 8px;
+    white-space: nowrap;
+}
+
 .smsys-empty {
     color: var(--smsys-muted);
     padding: 12px;

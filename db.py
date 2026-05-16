@@ -73,8 +73,14 @@ class SubjectsDB:
     def list_subjects(self, discipline_id: int) -> list[sqlite3.Row]:
         return list(
             self.con.execute(
-                "SELECT id, name FROM subjects"
-                "  WHERE discipline_id = ? ORDER BY name",
+                """
+                SELECT s.id, s.name, COUNT(ns.note_id) AS note_count
+                  FROM subjects s
+                  LEFT JOIN note_subjects ns ON ns.subject_id = s.id
+                 WHERE s.discipline_id = ?
+                 GROUP BY s.id, s.name
+                 ORDER BY s.name
+                """,
                 (discipline_id,),
             )
         )

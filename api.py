@@ -26,7 +26,7 @@ def _row_to_discipline(row: sqlite3.Row) -> dict[str, Any]:
 
 
 def _row_to_subject(row: sqlite3.Row) -> dict[str, Any]:
-    return {"id": int(row["id"]), "name": row["name"]}
+    return {"id": int(row["id"]), "name": row["name"], "note_count": int(row["note_count"])}
 
 
 def _require_name(name: str, label: str) -> str:

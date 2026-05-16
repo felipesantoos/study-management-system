@@ -129,6 +129,7 @@ async function loadSubjects(disciplineId, container, refreshAll) {
     for (const s of subjects) {
         const row = h(".smsys-tree-row.is-subject", null,
             h("span.smsys-tree-name", s.name),
+            h("span.smsys-badge", `${s.note_count} notes`),
             h(".smsys-tree-actions", null,
                 h("button.smsys-tree-action",
                     { title: "Show notes in Browser",
