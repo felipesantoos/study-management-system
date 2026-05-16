@@ -314,7 +314,11 @@ def test_row2_reassign_subject_to_discipline_replaces_tag():
 
 
 def test_row3_bulk_assign_50_notes_single_undo_entry():
-    """50 notes → uses inline _op path (not CollectionOp) → one undo entry."""
+    """50 notes → uses inline _op path (not CollectionOp) → one custom undo entry.
+
+    Intermediate merges keep the custom step at the front of Anki's 30-entry
+    undo deque, so the user still sees one combined "Update smsys:: tags" entry.
+    """
     tagsync._sync_enabled = True
     _setup_db()
 
@@ -324,9 +328,11 @@ def test_row3_bulk_assign_50_notes_single_undo_entry():
 
     tagsync.apply_assignment(nids, "discipline", 1)
 
-    # Single undo entry created and merged
+    # One custom step; merge_undo_entries called repeatedly into the same id
     _mock_mw.col.add_custom_undo_entry.assert_called_once_with("Update smsys:: tags")
-    _mock_mw.col.merge_undo_entries.assert_called_once_with(42)
+    assert _mock_mw.col.merge_undo_entries.call_count >= 1
+    for call in _mock_mw.col.merge_undo_entries.call_args_list:
+        assert call.args == (42,)
 
     # All 50 notes carry the correct tag
     for note in notes.values():
@@ -349,6 +355,46 @@ def test_row3_bulk_assign_51_notes_uses_collection_op():
     # CollectionOp runs _op which creates one undo entry
     _mock_mw.col.add_custom_undo_entry.assert_called_once_with("Update smsys:: tags")
     assert _mock_mw.col.update_note.call_count == 51
+
+
+def test_row3_bulk_assign_large_does_not_evict_custom_undo():
+    """FDA-718 regression: bulk-assign past Anki's 30-entry undo deque must
+    not raise "target undo op not found". Simulates the deque eviction the
+    Anki backend performs and asserts merge_undo_entries never fires after
+    the custom step would be gone."""
+    tagsync._sync_enabled = True
+    _setup_db()
+
+    nids = list(range(700, 800))  # 100 notes — well past UNDO_LIMIT
+    notes = {nid: _MockNote() for nid in nids}
+    _setup_col(*notes.items())
+
+    UNDO_LIMIT = 30  # rslib/src/undo/mod.rs
+    queue_size = [1]  # custom step occupies one slot to start
+    custom_alive = [True]
+
+    def _on_update_note(_note):
+        if queue_size[0] >= UNDO_LIMIT:
+            custom_alive[0] = False
+        else:
+            queue_size[0] += 1
+
+    def _on_merge(_undo_id):
+        if not custom_alive[0]:
+            raise RuntimeError("target undo op not found")
+        queue_size[0] = 1  # entries fold back into the custom step
+
+    _mock_mw.col.update_note.side_effect = _on_update_note
+    _mock_mw.col.merge_undo_entries.side_effect = _on_merge
+
+    try:
+        tagsync.apply_assignment(nids, "discipline", 1)
+    finally:
+        _mock_mw.col.update_note.side_effect = None
+        _mock_mw.col.merge_undo_entries.side_effect = None
+
+    assert custom_alive[0]
+    assert _mock_mw.col.update_note.call_count == 100
 
 
 # ---------------------------------------------------------------------------

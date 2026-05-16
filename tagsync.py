@@ -134,6 +134,15 @@ def _set_note_tag(col, note_id: int, new_tag: str | None) -> bool:
     return False
 
 
+# Anki caps its undo deque at 30 entries (UNDO_LIMIT in rslib/src/undo/mod.rs).
+# Each col.update_note() pushes a new entry; past the limit the oldest entry —
+# including our custom undo step — gets evicted, and the trailing
+# merge_undo_entries() then raises "target undo op not found". Folding the
+# intermediate steps back into the custom entry every N writes keeps it at the
+# front of the deque so a single user-visible undo entry covers the whole batch.
+_UNDO_MERGE_EVERY = 20
+
+
 def _execute_batch(
     note_ids: list[int], tag_fn: Callable[[int], str | None]
 ) -> None:
@@ -143,8 +152,13 @@ def _execute_batch(
 
     def _op(col):
         undo_id = col.add_custom_undo_entry("Update smsys:: tags")
+        writes_since_merge = 0
         for nid in note_ids:
-            _set_note_tag(col, nid, tag_fn(nid))
+            if _set_note_tag(col, nid, tag_fn(nid)):
+                writes_since_merge += 1
+                if writes_since_merge >= _UNDO_MERGE_EVERY:
+                    col.merge_undo_entries(undo_id)
+                    writes_since_merge = 0
         return col.merge_undo_entries(undo_id)
 
     if len(note_ids) > 50:
@@ -266,8 +280,14 @@ def backfill_all() -> None:
     def _make_chunk_op(chunk: list[int]):
         def _op(col):
             undo_id = col.add_custom_undo_entry("Backfill smsys:: tags")
+            writes_since_merge = 0
             for nid in chunk:
-                total_updated[0] += _set_note_tag(col, nid, tag_map[nid])
+                if _set_note_tag(col, nid, tag_map[nid]):
+                    total_updated[0] += 1
+                    writes_since_merge += 1
+                    if writes_since_merge >= _UNDO_MERGE_EVERY:
+                        col.merge_undo_entries(undo_id)
+                        writes_since_merge = 0
             return col.merge_undo_entries(undo_id)
 
         def _on_success(_result) -> None:
