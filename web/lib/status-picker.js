@@ -21,15 +21,18 @@ export function statusLabel(slug) {
 
 let activePicker = null;
 
-export function closeStatusPicker() {
+export function closeStatusPicker({ restoreFocus = true } = {}) {
     if (!activePicker) return;
     const { pickerEl, triggerEl, onDocMouseDown, onKeydown } = activePicker;
     document.removeEventListener("mousedown", onDocMouseDown, true);
     document.removeEventListener("keydown", onKeydown, true);
     pickerEl.remove();
     activePicker = null;
-    if (triggerEl && typeof triggerEl.focus === "function") {
-        triggerEl.focus();
+    if (triggerEl) {
+        triggerEl.setAttribute("aria-expanded", "false");
+        if (restoreFocus && typeof triggerEl.focus === "function") {
+            triggerEl.focus();
+        }
     }
 }
 
@@ -75,6 +78,7 @@ export function openStatusPicker(triggerEl, nodeId, nodeType) {
 
     document.body.appendChild(pickerEl);
     positionPicker(pickerEl, triggerEl);
+    triggerEl.setAttribute("aria-expanded", "true");
 
     const initialIndex = Math.max(0, options.findIndex(o => o.classList.contains("is-current")));
     setFocusedIndex(initialIndex);
@@ -154,9 +158,13 @@ export function openStatusPicker(triggerEl, nodeId, nodeType) {
                 }
                 break;
             case "Escape":
-            case "Tab":
                 e.preventDefault();
                 closeStatusPicker();
+                break;
+            case "Tab":
+                // Let the browser advance focus naturally to the next/prev tabbable element.
+                // Don't refocus the trigger — that would block Tab from leaving the status control.
+                closeStatusPicker({ restoreFocus: false });
                 break;
         }
     }

@@ -7,6 +7,8 @@ function makeStatusDot(node, nodeType) {
     return h("button.smsys-status-dot", {
         "data-status": status,
         "aria-label": `Status: ${statusLabel(status)} — click to change`,
+        "aria-haspopup": "listbox",
+        "aria-expanded": "false",
         title: statusLabel(status),
         type: "button",
         onClick: (e) => {
