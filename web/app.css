@@ -110,8 +110,9 @@
     --smsys-sidebar-active-bg: rgba(13, 110, 253, 0.10);
     --smsys-sidebar-active-fg: var(--smsys-accent);
     --smsys-danger: #dc3545;
-    --smsys-stat-new: #28a745;
-    --smsys-stat-lrn: #fd7e14;
+    --smsys-stat-new: #0d6efd;
+    --smsys-stat-lrn: #ef4444;
+    --smsys-stat-due: #28a745;
 
     /* Status tokens shipped in FDA-708 — must not be overwritten by later
        phases. Other status colors reuse existing semantic tokens.
@@ -141,8 +142,9 @@
     --smsys-sidebar-active-bg: rgba(78, 163, 255, 0.15);
     --smsys-sidebar-active-fg: var(--smsys-accent);
     --smsys-danger: #ff6b6b;
-    --smsys-stat-new: #4cbb6d;
-    --smsys-stat-lrn: #ff9b45;
+    --smsys-stat-new: #4ea3ff;
+    --smsys-stat-lrn: #f87171;
+    --smsys-stat-due: #4cbb6d;
     --smsys-status-backlog:  #64748b;
     --smsys-status-archived: #64748b;
 
@@ -531,7 +533,7 @@
  * exit; click anywhere on a toast to dismiss early.
  *
  * Icon prefix colours:
- *   success → --smsys-stat-new (green)
+ *   success → --smsys-stat-due (green)
  *   error   → --smsys-danger   (red)
  *   info    → --smsys-accent   (brand) */
 .smsys-toast-stack {
@@ -580,10 +582,10 @@
 .smsys-toast-msg  { line-height: var(--smsys-leading-normal); }
 
 .smsys-toast--success {
-    border-left-color: var(--smsys-stat-new);
+    border-left-color: var(--smsys-stat-due);
     color: var(--smsys-fg);
 }
-.smsys-toast--success .smsys-toast-icon { color: var(--smsys-stat-new); }
+.smsys-toast--success .smsys-toast-icon { color: var(--smsys-stat-due); }
 
 .smsys-toast--error {
     border-left-color: var(--smsys-danger);
@@ -742,7 +744,7 @@
     opacity: 0.4;
 }
 
-.smsys-stat.is-due { color: var(--smsys-accent); }
+.smsys-stat.is-due { color: var(--smsys-stat-due); }
 .smsys-stat.is-new { color: var(--smsys-stat-new); }
 .smsys-stat.is-lrn { color: var(--smsys-stat-lrn); }
 
@@ -1025,7 +1027,7 @@
     line-height: 1;
 }
 
-.smsys-due-stat.is-due { color: var(--smsys-accent); }
+.smsys-due-stat.is-due { color: var(--smsys-stat-due); }
 .smsys-due-stat.is-new { color: var(--smsys-stat-new); }
 .smsys-due-stat.is-lrn { color: var(--smsys-stat-lrn); }
 
@@ -1178,7 +1180,7 @@ mark.smsys-highlight {
 .smsys-status-dot[data-status="todo"]        { background: var(--smsys-accent); }
 .smsys-status-dot[data-status="in-progress"] { background: var(--smsys-stat-lrn); }
 .smsys-status-dot[data-status="blocked"]     { background: var(--smsys-danger); }
-.smsys-status-dot[data-status="done"]        { background: var(--smsys-stat-new); }
+.smsys-status-dot[data-status="done"]        { background: var(--smsys-stat-due); }
 .smsys-status-dot[data-status="archived"]    { background: var(--smsys-status-archived); }
 
 /* ----- status badge (detail panel header) ----- */
@@ -1216,7 +1218,7 @@ mark.smsys-highlight {
 .smsys-status-dot-md[data-status="todo"]        { background: var(--smsys-accent); }
 .smsys-status-dot-md[data-status="in-progress"] { background: var(--smsys-stat-lrn); }
 .smsys-status-dot-md[data-status="blocked"]     { background: var(--smsys-danger); }
-.smsys-status-dot-md[data-status="done"]        { background: var(--smsys-stat-new); }
+.smsys-status-dot-md[data-status="done"]        { background: var(--smsys-stat-due); }
 .smsys-status-dot-md[data-status="archived"]    { background: var(--smsys-status-archived); }
 
 .smsys-status-badge-caret {
@@ -1300,7 +1302,7 @@ mark.smsys-highlight {
 .smsys-status-dot-sm[data-status="todo"]        { background: var(--smsys-accent); }
 .smsys-status-dot-sm[data-status="in-progress"] { background: var(--smsys-stat-lrn); }
 .smsys-status-dot-sm[data-status="blocked"]     { background: var(--smsys-danger); }
-.smsys-status-dot-sm[data-status="done"]        { background: var(--smsys-stat-new); }
+.smsys-status-dot-sm[data-status="done"]        { background: var(--smsys-stat-due); }
 .smsys-status-dot-sm[data-status="archived"]    { background: var(--smsys-status-archived); }
 
 .smsys-status-option-content {

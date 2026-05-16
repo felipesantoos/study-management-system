@@ -32,7 +32,7 @@ const STAT_ACCENT = {
     disciplines: "var(--smsys-disc-blue)",
     subjects:    "var(--smsys-disc-violet)",
     topics:      "var(--smsys-disc-teal)",
-    assigned:    "var(--smsys-stat-new)",
+    assigned:    "var(--smsys-stat-due)",
 };
 
 function statTile(variant, value, label, { sublabel } = {}) {
