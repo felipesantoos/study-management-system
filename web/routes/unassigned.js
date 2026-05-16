@@ -19,12 +19,12 @@ export async function render(container) {
     }
 
     if (noteIds.length === 0) {
-        statusEl.textContent = "All notes are assigned to a subject.";
+        statusEl.textContent = "All notes are assigned.";
         return;
     }
 
     const n = noteIds.length;
-    statusEl.textContent = `${n} note${n === 1 ? "" : "s"} not assigned to any subject.`;
+    statusEl.textContent = `${n} note${n === 1 ? "" : "s"} not assigned to any discipline, subject, or topic.`;
 
     page.appendChild(
         h("button.smsys-btn.smsys-btn-primary",
