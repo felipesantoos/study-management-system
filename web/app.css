@@ -451,9 +451,10 @@
     flex-shrink: 0;
     /* Reserve a consistent width for the action column so the meta group above
        aligns vertically across discipline, subject, and topic rows even though
-       the topic row carries one fewer button. Sized for 8 × 26px icon buttons
-       (14px icon + 10px padding + 2px reserved border) plus 7 × 4px gaps. */
-    min-width: 240px;
+       the topic row carries fewer buttons. Sized for 9 × 26px icon buttons
+       (14px icon + 10px padding + 2px reserved border) plus 8 × 4px gaps —
+       discipline and subject rows now include a bulk-add action (FDA-737). */
+    min-width: 270px;
     opacity: 0;
     transition: opacity var(--smsys-duration-micro) var(--smsys-ease);
 }
@@ -810,6 +811,62 @@
     gap: 6px;
     margin-top: var(--smsys-space-2);
 }
+
+/* ----- bulk-add modal (FDA-737) -----
+ * Slightly wider than the picker modal so a multi-line textarea has room. */
+.smsys-modal--bulk {
+    width: 480px;
+}
+
+.smsys-modal-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: var(--smsys-space-2);
+    background: var(--smsys-bg);
+    color: var(--smsys-fg);
+    border: 1px solid var(--smsys-border);
+    border-radius: var(--smsys-radius-sm);
+    font: inherit;
+    font-size: var(--smsys-text-base);
+    resize: vertical;
+    min-height: 8em;
+}
+.smsys-modal-textarea:focus-visible {
+    outline: none;
+    border-color: var(--smsys-accent);
+    box-shadow: 0 0 0 2px var(--smsys-focus-ring-bg);
+}
+
+.smsys-bulk-count {
+    margin: 0;
+    font-style: normal;
+    font-variant-numeric: tabular-nums;
+}
+
+.smsys-bulk-errors {
+    border: 1px solid var(--smsys-danger);
+    border-radius: var(--smsys-radius-sm);
+    padding: var(--smsys-space-2) var(--smsys-space-3);
+    background: transparent;
+}
+.smsys-bulk-errors[hidden] { display: none; }
+
+.smsys-bulk-errors-summary {
+    margin: 0 0 var(--smsys-space-1);
+    color: var(--smsys-danger);
+    font-weight: var(--smsys-weight-semibold);
+    font-size: var(--smsys-text-sm);
+}
+
+.smsys-bulk-errors-list {
+    margin: 0;
+    padding-left: var(--smsys-space-4);
+    font-size: var(--smsys-text-sm);
+    color: var(--smsys-fg);
+    max-height: 8em;
+    overflow-y: auto;
+}
+.smsys-bulk-errors-list li { margin: 0; line-height: 1.4; }
 
 /* ----- per-subject card stats strip ----- */
 .smsys-subject-stats {

@@ -46,6 +46,14 @@ function makeActionIcon(name) {
             stroke("M16 13H8M16 17H8M10 9H8");
             break;
         case "plus":        stroke("M12 5v14M5 12h14"); break;
+        case "list-plus":
+            // list-plus — three stacked lines on the left, plus icon on the right.
+            // Signals "add many" vs. plain "plus" / "add one".
+            stroke("M11 12H3");
+            stroke("M16 6H3");
+            stroke("M16 18H3");
+            stroke("M18 9v6M21 12h-6");
+            break;
         case "pencil":
             // pencil-line — diagonal pencil with a distinct tip and cap line
             stroke("M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z");
@@ -424,6 +432,11 @@ export async function render(container) {
     const toolbar = h(".smsys-tree-toolbar", null,
         h(".smsys-tree-toolbar-row", null,
             filterInput,
+            h("button.smsys-btn",
+                { onClick: () => onBulkAddDisciplines(refresh),
+                  "aria-label": "Bulk add disciplines" },
+                "Bulk add"
+            ),
             h("button.smsys-btn.smsys-btn-primary",
                 { onClick: onNewDiscipline, "aria-label": "Create new discipline" },
                 "+ New Discipline"
@@ -851,6 +864,12 @@ async function renderDiscipline(d, refreshAll) {
                   onClick: (e) => { e.stopPropagation(); onAddSubject(d, childrenEl, refreshAll); } },
                 makeActionIcon("plus")
             ),
+            h("button.smsys-tree-action.smsys-tree-action--add",
+                { title: "Bulk add subjects",
+                  "aria-label": `Bulk add subjects to ${d.name}`,
+                  onClick: (e) => { e.stopPropagation(); onBulkAddSubjects(d, refreshAll); } },
+                makeActionIcon("list-plus")
+            ),
             h("button.smsys-tree-action.smsys-tree-action--edit",
                 { title: "Rename",
                   "aria-label": `Rename ${d.name}`,
@@ -1028,6 +1047,12 @@ async function renderSubject(s, disciplineId, siblingContainer, refreshAll, stat
                   "aria-label": `Add topic to ${s.name}`,
                   onClick: (e) => { e.stopPropagation(); onAddTopic(s, topicsEl, refreshAll); } },
                 makeActionIcon("plus")
+            ),
+            h("button.smsys-tree-action.smsys-tree-action--add",
+                { title: "Bulk add topics",
+                  "aria-label": `Bulk add topics to ${s.name}`,
+                  onClick: (e) => { e.stopPropagation(); onBulkAddTopics(s, refreshAll); } },
+                makeActionIcon("list-plus")
             ),
             h("button.smsys-tree-action.smsys-tree-action--move",
                 { title: "Move all notes to another placement",
@@ -1730,6 +1755,186 @@ function showAssignmentPickerModal({
     function onKeydown(e) {
         if (e.key === "Escape") { e.preventDefault(); dismiss(); }
         if (e.key === "Enter" && !saveBtn.disabled) { e.preventDefault(); commit(); }
+    }
+
+    function teardown() {
+        document.removeEventListener("keydown", onKeydown);
+        overlay.remove();
+    }
+}
+
+// ============================================================
+// Bulk-add modal (FDA-737)
+// ============================================================
+
+function onBulkAddDisciplines(refreshAll) {
+    showBulkAddModal({
+        title: "Bulk add disciplines",
+        statusText: "Each non-empty line becomes a new discipline.",
+        createLabel: "Create disciplines",
+        successNoun: { one: "discipline", many: "disciplines" },
+        onCreateOne: (name) => invoke("disciplines.create", { name }),
+        onAfterCreate: refreshAll,
+    });
+}
+
+function onBulkAddSubjects(d, refreshAll) {
+    showBulkAddModal({
+        title: "Bulk add subjects",
+        statusText: `Adding subjects under "${d.name}".`,
+        createLabel: "Create subjects",
+        successNoun: { one: "subject", many: "subjects" },
+        onCreateOne: (name) => invoke("subjects.create", { discipline_id: d.id, name }),
+        onAfterCreate: refreshAll,
+    });
+}
+
+function onBulkAddTopics(s, refreshAll) {
+    showBulkAddModal({
+        title: "Bulk add topics",
+        statusText: `Adding topics under "${s.name}".`,
+        createLabel: "Create topics",
+        successNoun: { one: "topic", many: "topics" },
+        onCreateOne: (name) => invoke("topics.create", { subject_id: s.id, name }),
+        onAfterCreate: refreshAll,
+    });
+}
+
+// Shared bulk-creation modal. Parses the textarea by newline, trims each line,
+// skips empties, then invokes `onCreateOne(name)` sequentially for each entry.
+// On full success: closes the modal, refreshes the tree, and toasts a count.
+// On partial failure: keeps the modal open with the failed names re-populated
+// in the textarea and an inline error list, while still refreshing the tree so
+// the successfully created items are visible underneath.
+function showBulkAddModal({
+    title,
+    statusText,
+    createLabel = "Create",
+    successNoun = { one: "item", many: "items" },
+    onCreateOne,
+    onAfterCreate,
+}) {
+    const textarea = h("textarea.smsys-modal-textarea", {
+        rows: 8,
+        placeholder: "One name per line",
+        "aria-label": "Names, one per line",
+        spellcheck: "false",
+    });
+
+    const countEl = h("p.smsys-modal-hint.smsys-bulk-count", "0 items to create");
+    const errorEl = h(".smsys-bulk-errors", { hidden: true });
+
+    function parseNames() {
+        return textarea.value
+            .split("\n")
+            .map(s => s.trim())
+            .filter(Boolean);
+    }
+
+    function updateCount() {
+        const n = parseNames().length;
+        countEl.textContent = `${n} item${n === 1 ? "" : "s"} to create`;
+        createBtn.disabled = n === 0 || isCreating;
+    }
+
+    let isCreating = false;
+
+    const createBtn = h("button.smsys-btn.smsys-btn-primary",
+        { disabled: true, onClick: commit },
+        createLabel
+    );
+    const cancelBtn = h("button.smsys-btn", { onClick: dismiss }, "Cancel");
+
+    textarea.addEventListener("input", updateCount);
+
+    const overlay = h(".smsys-modal-overlay", { onClick: onOverlayClick },
+        h(".smsys-modal.smsys-modal--bulk", { onClick: e => e.stopPropagation() },
+            h("h2.smsys-modal-title", title),
+            statusText ? h("p.smsys-modal-status", statusText) : null,
+            h(".smsys-modal-label", "Names"),
+            textarea,
+            countEl,
+            errorEl,
+            h(".smsys-modal-actions", null, cancelBtn, createBtn),
+        )
+    );
+
+    document.addEventListener("keydown", onKeydown);
+    document.body.appendChild(overlay);
+    textarea.focus();
+
+    async function commit() {
+        if (isCreating) return;
+        const names = parseNames();
+        if (!names.length) return;
+        isCreating = true;
+        createBtn.disabled = true;
+        cancelBtn.disabled = true;
+        textarea.disabled = true;
+        createBtn.textContent = "Creating…";
+        clear(errorEl);
+        errorEl.hidden = true;
+
+        let createdCount = 0;
+        const failures = [];
+        for (const name of names) {
+            try {
+                await onCreateOne(name);
+                createdCount += 1;
+            } catch (e) {
+                failures.push({ name, error: e?.message || String(e) });
+            }
+        }
+
+        if (failures.length === 0) {
+            const noun = createdCount === 1 ? successNoun.one : successNoun.many;
+            toast(`Created ${createdCount} ${noun}.`, { type: "success" });
+            teardown();
+            if (onAfterCreate) await onAfterCreate();
+            return;
+        }
+
+        // Partial failure: keep modal open so the user can retry the failed
+        // entries, but still refresh the tree so any successful creations show.
+        const summary = createdCount > 0
+            ? `Created ${createdCount} of ${names.length}. ${failures.length} failed:`
+            : `${failures.length} failed:`;
+        errorEl.appendChild(h("p.smsys-bulk-errors-summary", summary));
+        errorEl.appendChild(h("ul.smsys-bulk-errors-list", null,
+            ...failures.map(f => h("li", null,
+                h("strong", null, f.name),
+                ` — ${f.error}`,
+            )),
+        ));
+        errorEl.hidden = false;
+        textarea.value = failures.map(f => f.name).join("\n");
+        textarea.disabled = false;
+        cancelBtn.disabled = false;
+        createBtn.textContent = createLabel;
+        isCreating = false;
+        if (createdCount > 0 && onAfterCreate) {
+            try { await onAfterCreate(); } catch (_) { /* swallow — modal stays */ }
+        }
+        updateCount();
+        textarea.focus();
+    }
+
+    function dismiss() {
+        if (isCreating) return;
+        teardown();
+    }
+
+    function onOverlayClick() { dismiss(); }
+
+    function onKeydown(e) {
+        if (e.key === "Escape") {
+            e.preventDefault();
+            dismiss();
+        }
+        if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !createBtn.disabled) {
+            e.preventDefault();
+            commit();
+        }
     }
 
     function teardown() {
