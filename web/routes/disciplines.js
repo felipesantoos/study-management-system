@@ -3,15 +3,17 @@ import { invoke, toast } from "../lib/bridge.js";
 import { openStatusPicker, statusLabel } from "../lib/status-picker.js";
 import { emptyState, EMPTY_ICONS } from "../lib/empty-state.js";
 
-// Inline SVG icons for action buttons (12×12, stroke-based, currentColor).
-// Each name maps to the geometry for one recognizable glyph. Play uses fill
-// because a solid triangle reads better than a stroked outline at small sizes.
+// Inline SVG icons for action buttons (Lucide-style, 24×24 viewBox displayed
+// at 14×14, stroke-based, currentColor). The 24×24 viewBox lets us reuse
+// well-tuned Lucide path geometry directly — at 14px display the strokes
+// stay readable while the icons keep clean joins, even ends, and consistent
+// optical weight across the set.
 function makeActionIcon(name) {
     const NS = "http://www.w3.org/2000/svg";
     const svg = document.createElementNS(NS, "svg");
-    svg.setAttribute("viewBox", "0 0 16 16");
-    svg.setAttribute("width", "12");
-    svg.setAttribute("height", "12");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("width", "14");
+    svg.setAttribute("height", "14");
     svg.setAttribute("aria-hidden", "true");
     svg.setAttribute("focusable", "false");
     svg.style.flexShrink = "0";
@@ -21,7 +23,7 @@ function makeActionIcon(name) {
         p.setAttribute("d", d);
         p.setAttribute("fill", "none");
         p.setAttribute("stroke", "currentColor");
-        p.setAttribute("stroke-width", "1.6");
+        p.setAttribute("stroke-width", "2");
         p.setAttribute("stroke-linecap", "round");
         p.setAttribute("stroke-linejoin", "round");
         svg.appendChild(p);
@@ -32,31 +34,35 @@ function makeActionIcon(name) {
         p.setAttribute("fill", "currentColor");
         svg.appendChild(p);
     }
-    function circle(cx, cy, r) {
-        const c = document.createElementNS(NS, "circle");
-        c.setAttribute("cx", String(cx));
-        c.setAttribute("cy", String(cy));
-        c.setAttribute("r", String(r));
-        c.setAttribute("fill", "none");
-        c.setAttribute("stroke", "currentColor");
-        c.setAttribute("stroke-width", "1.6");
-        svg.appendChild(c);
-    }
 
     switch (name) {
-        case "up":          stroke("M4 10.5L8 6l4 4.5"); break;
-        case "down":        stroke("M4 5.5L8 10l4-4.5"); break;
-        case "play":        fill("M5 2.5L13.5 8 5 13.5z"); break;
-        case "eye":
-            stroke("M1 8C3 3.5 5.5 2 8 2s5 1.5 7 6c-2 4.5-4.5 6-7 6S3 12.5 1 8z");
-            circle(8, 8, 2.5);
+        case "up":          stroke("M18 15l-6-6-6 6"); break;          // chevron-up
+        case "down":        stroke("M6 9l6 6 6-6"); break;             // chevron-down
+        case "play":        fill("M6 3v18l14-9z"); break;              // solid triangle
+        case "file":
+            // file-text: paper outline + corner fold + 3 text lines
+            stroke("M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z");
+            stroke("M14 2v6h6");
+            stroke("M16 13H8M16 17H8M10 9H8");
             break;
-        case "file":        stroke("M4 2h6l4 4v10H4V2zm6 0v4h4"); break;
-        case "plus":        stroke("M8 3v10M3 8h10"); break;
-        case "pencil":      stroke("M11.5 2.5a1.5 1.5 0 0 1 2 2L5.5 12.5l-3 .5.5-3z"); break;
-        case "trash":       stroke("M3 5h10M6 5V3.5h4V5M4.5 5l.5 9.5h7L12.5 5M7 8v4M9 8v4"); break;
-        case "arrow-right": stroke("M3 8h10M9 4l4 4-4 4"); break;
-        case "droplet":     stroke("M8 1.5L4.5 8.5C4.5 12 6 14.5 8 14.5s3.5-2.5 3.5-6z"); break;
+        case "plus":        stroke("M12 5v14M5 12h14"); break;
+        case "pencil":
+            // pencil-line — diagonal pencil with a distinct tip and cap line
+            stroke("M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z");
+            stroke("M15 5l3 3");
+            break;
+        case "trash":
+            // trash-2 — lid + bin body + 2 inner ribs
+            stroke("M3 6h18");
+            stroke("M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2");
+            stroke("M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6");
+            stroke("M10 11v6M14 11v6");
+            break;
+        case "arrow-right": stroke("M5 12h14M13 5l7 7-7 7"); break;
+        case "droplet":
+            // droplet — closed teardrop, no extraneous strokes
+            stroke("M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z");
+            break;
     }
 
     return svg;
