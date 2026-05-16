@@ -358,11 +358,23 @@
     color: var(--smsys-muted);
 }
 
+/* Inline SVG chevron caret (FDA-715). Rotates 90° clockwise on .is-open.
+   Sized at 10px to match the previous text caret's visual weight. */
 .smsys-tree-caret {
     width: var(--smsys-space-4);
-    text-align: center;
+    height: var(--smsys-space-4);
+    flex-shrink: 0;
     margin-right: var(--smsys-space-1);
     color: var(--smsys-muted);
+    transform: rotate(0deg);
+    transform-origin: center;
+    transition: transform var(--smsys-duration-fast) var(--smsys-ease);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.smsys-tree-caret.is-open {
+    transform: rotate(90deg);
 }
 
 .smsys-tree-name { flex: 1; }
@@ -401,21 +413,15 @@
     color: var(--smsys-accent);
 }
 
-/* ----- discipline color swatch ----- */
+/* ----- discipline color swatch -----
+ * The discipline color is now visually represented by the 4px left-edge
+ * border on .smsys-tree-discipline (FDA-715). The .smsys-color-btn wrapper
+ * remains so the hidden <input type="color"> can be positioned over the
+ * "color" action button. */
 .smsys-color-btn {
     position: relative;
     display: inline-flex;
     align-items: center;
-}
-
-.smsys-color-dot {
-    display: inline-block;
-    width: var(--smsys-space-3);
-    height: var(--smsys-space-3);
-    border-radius: var(--smsys-radius-full);
-    background: var(--smsys-muted);
-    border: 1.5px solid var(--smsys-color-dot-border);
-    flex-shrink: 0;
 }
 
 .smsys-badge {
@@ -932,10 +938,31 @@
     font-style: italic;
 }
 
-/* ----- filter / search bar ----- */
-.smsys-filter-bar {
+/* ----- sticky tree toolbar (FDA-715) -----
+ * Wraps the search input, "+ New Discipline" button, and status filter chips
+ * in a position:sticky bar so they stay visible while a long tree scrolls.
+ * Sticks to the top of the .smsys-main scroll container; background and the
+ * border-bottom hide rows that scroll behind it. */
+.smsys-tree-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: var(--smsys-bg);
+    border-bottom: 1px solid var(--smsys-border);
+    padding: var(--smsys-space-2) 0 var(--smsys-space-3);
     margin-bottom: var(--smsys-space-3);
+    display: flex;
+    flex-direction: column;
+    gap: var(--smsys-space-2);
 }
+
+.smsys-tree-toolbar-row {
+    display: flex;
+    align-items: center;
+    gap: var(--smsys-space-2);
+}
+.smsys-tree-toolbar-row .smsys-filter-input { flex: 1; }
+.smsys-tree-toolbar-row .smsys-btn { margin: 0; }
 
 .smsys-filter-input {
     width: 100%;
@@ -952,6 +979,42 @@
 .smsys-filter-input:focus {
     border-color: var(--smsys-accent);
     box-shadow: 0 0 0 2px var(--smsys-focus-ring-bg);
+}
+
+/* Status filter chips — rounded pill buttons under the toolbar row. The
+   active chip uses the brand accent to mirror selected state of nav items. */
+.smsys-tree-filter-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--smsys-space-1);
+}
+
+.smsys-filter-chip {
+    padding: 2px 10px;
+    border: 1px solid var(--smsys-border);
+    border-radius: var(--smsys-radius-full);
+    background: transparent;
+    color: var(--smsys-muted);
+    font: inherit;
+    font-size: var(--smsys-text-xs);
+    font-weight: var(--smsys-weight-semibold);
+    cursor: pointer;
+    transition: background var(--smsys-duration-fast) var(--smsys-ease),
+                color var(--smsys-duration-fast) var(--smsys-ease),
+                border-color var(--smsys-duration-fast) var(--smsys-ease);
+}
+.smsys-filter-chip:hover {
+    background: var(--smsys-hover);
+    color: var(--smsys-fg);
+}
+.smsys-filter-chip.is-active {
+    background: var(--smsys-accent);
+    color: var(--smsys-accent-fg);
+    border-color: var(--smsys-accent);
+}
+.smsys-filter-chip:focus-visible {
+    outline: 2px solid var(--smsys-accent);
+    outline-offset: 2px;
 }
 
 /* ----- match highlight ----- */

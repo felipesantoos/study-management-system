@@ -2,6 +2,52 @@ import { h, clear } from "../lib/dom.js";
 import { invoke, toast } from "../lib/bridge.js";
 import { openStatusPicker, statusLabel } from "../lib/status-picker.js";
 
+// Inline SVG chevron used as the expand/collapse indicator. Rotates 90° via
+// CSS when the .is-open class is set. Right-pointing in the closed state so
+// the rotation animates around the natural visual anchor.
+function makeCaret(isOpen) {
+    const NS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("class", "smsys-tree-caret" + (isOpen ? " is-open" : ""));
+    svg.setAttribute("viewBox", "0 0 16 16");
+    svg.setAttribute("width", "10");
+    svg.setAttribute("height", "10");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("focusable", "false");
+    const path = document.createElementNS(NS, "path");
+    path.setAttribute("d", "M6 4l4 4-4 4");
+    path.setAttribute("stroke", "currentColor");
+    path.setAttribute("stroke-width", "1.6");
+    path.setAttribute("stroke-linecap", "round");
+    path.setAttribute("stroke-linejoin", "round");
+    path.setAttribute("fill", "none");
+    svg.appendChild(path);
+    return svg;
+}
+
+// Stats panel — three icon+number pills (due, new, learning) replacing the
+// old text "3 due / 1 new / 2 lrn" tokens. Returned alongside the pill
+// container so callers can update individual values asynchronously.
+function makeStatsPanel() {
+    const dueEl = h("span.smsys-stat.is-due",  { title: "0 due"     }, "↩ ·");
+    const newEl = h("span.smsys-stat.is-new",  { title: "0 new"     }, "✦ ·");
+    const lrnEl = h("span.smsys-stat.is-lrn",  { title: "0 learning"}, "◐ ·");
+    const statsEl = h(".smsys-subject-stats.is-loading", null, dueEl, newEl, lrnEl);
+    return { statsEl, dueEl, newEl, lrnEl };
+}
+
+function applyStat(entry, stat) {
+    const { statsEl, dueEl, newEl, lrnEl } = entry;
+    statsEl.classList.remove("is-loading");
+    statsEl.classList.toggle("is-all-zero", stat.due === 0 && stat.new === 0 && stat.lrn === 0);
+    dueEl.textContent = `↩ ${stat.due}`;
+    newEl.textContent = `✦ ${stat.new}`;
+    lrnEl.textContent = `◐ ${stat.lrn}`;
+    dueEl.title = `${stat.due} due`;
+    newEl.title = `${stat.new} new`;
+    lrnEl.title = `${stat.lrn} learning`;
+}
+
 function makeStatusDot(node, nodeType) {
     const status = node.study_status ?? "backlog";
     return h("button.smsys-status-dot", {
@@ -238,13 +284,9 @@ export async function render(container) {
             h("h1.smsys-page-title", "Disciplines, Subjects & Topics"),
             h("div.smsys-page-actions", null,
                 h("button.smsys-btn",
-                    { onClick: () => refresh() },
+                    { onClick: () => refresh(), "aria-label": "Refresh disciplines" },
                     "↺ Refresh"
                 ),
-                h("button.smsys-btn.smsys-btn-primary",
-                    { onClick: onNewDiscipline },
-                    "+ New Discipline"
-                )
             )
         )
     );
@@ -252,9 +294,53 @@ export async function render(container) {
     const filterInput = h("input.smsys-filter-input", {
         type: "search",
         placeholder: "Filter disciplines, subjects, and topics…",
+        "aria-label": "Filter disciplines, subjects, and topics",
         onInput: e => applyFilter(e.target.value),
     });
-    page.appendChild(h(".smsys-filter-bar", null, filterInput));
+
+    // Status filter chips (stretch from FDA-715). Clicking a chip narrows the
+    // tree to nodes whose data-status matches. Ancestors of a matching node
+    // stay visible so the path remains navigable.
+    const STATUS_CHIPS = [
+        { value: "",            label: "All" },
+        { value: "backlog",     label: "Backlog" },
+        { value: "todo",        label: "To Do" },
+        { value: "in-progress", label: "In Progress" },
+        { value: "blocked",     label: "Blocked" },
+        { value: "done",        label: "Done" },
+        { value: "archived",    label: "Archived" },
+    ];
+    let activeStatus = "";
+    const chipEls = STATUS_CHIPS.map(c => h("button.smsys-filter-chip", {
+        type: "button",
+        "data-status": c.value || "all",
+        "aria-pressed": c.value === activeStatus ? "true" : "false",
+        "aria-label": c.value
+            ? `Filter by status: ${c.label}`
+            : "Show all statuses",
+        onClick: () => {
+            activeStatus = c.value;
+            for (const el of chipEls) {
+                const v = el.dataset.status === "all" ? "" : el.dataset.status;
+                el.classList.toggle("is-active", v === activeStatus);
+                el.setAttribute("aria-pressed", v === activeStatus ? "true" : "false");
+            }
+            applyFilter(filterInput.value);
+        },
+    }, c.label));
+    chipEls[0].classList.add("is-active");
+
+    const toolbar = h(".smsys-tree-toolbar", null,
+        h(".smsys-tree-toolbar-row", null,
+            filterInput,
+            h("button.smsys-btn.smsys-btn-primary",
+                { onClick: onNewDiscipline, "aria-label": "Create new discipline" },
+                "+ New Discipline"
+            ),
+        ),
+        h(".smsys-tree-filter-chips", { role: "group", "aria-label": "Filter by study status" }, ...chipEls),
+    );
+    page.appendChild(toolbar);
 
     const treeEl = h(".smsys-tree");
     page.appendChild(treeEl);
@@ -308,11 +394,7 @@ export async function render(container) {
             for (const stat of statsList) {
                 const entry = discStatEls.get(stat.id);
                 if (!entry) continue;
-                entry.statsEl.classList.remove("is-loading");
-                entry.statsEl.classList.toggle("is-all-zero", stat.due === 0 && stat.new === 0 && stat.lrn === 0);
-                entry.dueEl.textContent = `${stat.due} due`;
-                entry.newEl.textContent = `${stat.new} new`;
-                entry.lrnEl.textContent = `${stat.lrn} lrn`;
+                applyStat(entry, stat);
             }
         } catch (_) {
             for (const { statsEl } of discStatEls.values()) {
@@ -320,25 +402,33 @@ export async function render(container) {
             }
         }
 
-        const q = filterInput.value.trim();
-        if (q) applyFilter(q);
+        if (filterInput.value.trim() || activeStatus) applyFilter(filterInput.value);
     }
 
     await refresh();
 
     function applyFilter(raw) {
-        const query = raw.trim().toLowerCase();
+        const query = (raw || "").trim().toLowerCase();
+        const sFilter = activeStatus;
+        const noFilters = !query && !sFilter;
+
+        function statusMatches(row) {
+            if (!sFilter) return true;
+            return row?.dataset?.status === sFilter;
+        }
+
         treeEl.querySelectorAll(":scope > .smsys-tree-discipline").forEach(dWrap => {
-            const dNameEl = dWrap.querySelector(":scope > .smsys-tree-row .smsys-tree-name");
+            const dRow = dWrap.querySelector(":scope > .smsys-tree-row");
+            const dNameEl = dRow?.querySelector(".smsys-tree-name");
             const dChildren = dWrap.querySelector(":scope > .smsys-tree-children");
-            const dCaret = dWrap.querySelector(":scope > .smsys-tree-row .smsys-tree-caret");
+            const dCaret = dRow?.querySelector(".smsys-tree-caret");
             const dKey = dWrap.dataset.storageKey;
 
-            if (!query) {
+            if (noFilters) {
                 dWrap.style.display = "";
                 const wasCollapsed = dKey && localStorage.getItem(dKey) === "1";
                 if (dChildren) dChildren.style.display = wasCollapsed ? "none" : "";
-                if (dCaret) dCaret.textContent = wasCollapsed ? "▸" : "▾";
+                if (dCaret) dCaret.classList.toggle("is-open", !wasCollapsed);
                 if (dChildren) {
                     dChildren.querySelectorAll(".smsys-tree-subject")
                         .forEach(sWrap => {
@@ -348,7 +438,7 @@ export async function render(container) {
                             const sKey = sWrap.dataset.storageKey;
                             const sWasCollapsed = !sKey || localStorage.getItem(sKey) !== "0";
                             if (sChildren) sChildren.style.display = sWasCollapsed ? "none" : "";
-                            if (sCaret) sCaret.textContent = sWasCollapsed ? "▸" : "▾";
+                            if (sCaret) sCaret.classList.toggle("is-open", !sWasCollapsed);
                             sWrap.querySelectorAll(".smsys-tree-row.is-topic")
                                 .forEach(r => { r.style.display = ""; });
                         });
@@ -359,30 +449,37 @@ export async function render(container) {
             }
 
             const dRaw = dNameEl ? (dNameEl.dataset.raw || dNameEl.textContent) : "";
-            const dMatches = dRaw.toLowerCase().includes(query);
+            const dTextMatches = !query || dRaw.toLowerCase().includes(query);
+            const dStatusOk = statusMatches(dRow);
+            const dMatches = dTextMatches && dStatusOk;
             let anyChildMatch = false;
 
             if (dChildren) {
                 dChildren.querySelectorAll(":scope > .smsys-tree-subject").forEach(sWrap => {
-                    const sNameEl = sWrap.querySelector(":scope > .smsys-tree-row .smsys-tree-name");
+                    const sRow = sWrap.querySelector(":scope > .smsys-tree-row");
+                    const sNameEl = sRow?.querySelector(".smsys-tree-name");
                     const sRaw = sNameEl ? (sNameEl.dataset.raw || sNameEl.textContent) : "";
-                    const sMatches = sRaw.toLowerCase().includes(query);
                     const sChildren = sWrap.querySelector(":scope > .smsys-tree-children");
-                    const sCaret = sWrap.querySelector(":scope > .smsys-tree-row .smsys-tree-caret");
+                    const sCaret = sRow?.querySelector(".smsys-tree-caret");
+                    const sTextMatches = !query || sRaw.toLowerCase().includes(query);
+                    const sStatusOk = statusMatches(sRow);
+                    const sSelfMatches = sTextMatches && sStatusOk;
                     let anyTopicMatch = false;
 
                     if (sChildren) {
                         sChildren.querySelectorAll(":scope > .smsys-tree-row.is-topic").forEach(tRow => {
                             const tNameEl = tRow.querySelector(".smsys-tree-name");
                             const tRaw = tNameEl ? (tNameEl.dataset.raw || tNameEl.textContent) : "";
-                            const tMatches = tRaw.toLowerCase().includes(query);
-                            if (dMatches || sMatches) {
-                                tRow.style.display = "";
-                                highlight(tNameEl, tRaw, query);
-                            } else if (tMatches) {
+                            const tTextMatches = !query || tRaw.toLowerCase().includes(query);
+                            const tStatusOk = statusMatches(tRow);
+                            const tMatches = tTextMatches && tStatusOk;
+                            // Show topic if it matches OR if an ancestor textually matches AND
+                            // the status filter is satisfied at the topic itself (so a status
+                            // filter still narrows leaves).
+                            if (tMatches) {
                                 anyTopicMatch = true;
                                 tRow.style.display = "";
-                                highlight(tNameEl, tRaw, query);
+                                if (query) highlight(tNameEl, tRaw, query); else restoreHighlight(tNameEl);
                             } else {
                                 tRow.style.display = "none";
                                 restoreHighlight(tNameEl);
@@ -390,12 +487,13 @@ export async function render(container) {
                         });
                     }
 
-                    if (dMatches || sMatches || anyTopicMatch) {
+                    if (sSelfMatches || anyTopicMatch) {
                         anyChildMatch = true;
                         sWrap.style.display = "";
                         if (sChildren) sChildren.style.display = "";
-                        if (sCaret) sCaret.textContent = "▾";
-                        highlight(sNameEl, sRaw, query);
+                        if (sCaret) sCaret.classList.add("is-open");
+                        if (sSelfMatches && query) highlight(sNameEl, sRaw, query);
+                        else restoreHighlight(sNameEl);
                     } else {
                         sWrap.style.display = "none";
                         restoreHighlight(sNameEl);
@@ -406,10 +504,12 @@ export async function render(container) {
             if (dMatches || anyChildMatch) {
                 dWrap.style.display = "";
                 if (dChildren) dChildren.style.display = "";
-                if (dCaret) dCaret.textContent = "▾";
-                highlight(dNameEl, dRaw, query);
+                if (dCaret) dCaret.classList.add("is-open");
+                if (dMatches && query) highlight(dNameEl, dRaw, query);
+                else restoreHighlight(dNameEl);
             } else {
                 dWrap.style.display = "none";
+                restoreHighlight(dNameEl);
             }
         });
     }
@@ -471,6 +571,9 @@ async function renderDiscipline(d, refreshAll) {
     const wrap = h(".smsys-tree-discipline");
     const childrenEl = h(".smsys-tree-children");
 
+    // Left-edge color bar (FDA-715). The wrap already has a 1px neutral border
+    // from the base style; setting border-left to 4px in the discipline color
+    // turns that edge into a vertical bar without needing a separate element.
     if (d.color) {
         wrap.style.borderLeftColor = d.color;
         wrap.style.borderLeftWidth = "4px";
@@ -480,19 +583,16 @@ async function renderDiscipline(d, refreshAll) {
     wrap.dataset.storageKey = storageKey;
     const startCollapsed = localStorage.getItem(storageKey) === "1";
 
-    const caretEl = h("span.smsys-tree-caret", startCollapsed ? "▸" : "▾");
+    const caretEl = makeCaret(!startCollapsed);
     if (startCollapsed) childrenEl.style.display = "none";
 
     function toggleCollapse(e) {
         e.stopPropagation();
         const collapsed = childrenEl.style.display === "none";
         childrenEl.style.display = collapsed ? "" : "none";
-        caretEl.textContent = collapsed ? "▾" : "▸";
+        caretEl.classList.toggle("is-open", collapsed);
         localStorage.setItem(storageKey, collapsed ? "0" : "1");
     }
-
-    const colorDot = h("span.smsys-color-dot");
-    if (d.color) colorDot.style.background = d.color;
 
     const colorInput = document.createElement("input");
     colorInput.type = "color";
@@ -503,7 +603,6 @@ async function renderDiscipline(d, refreshAll) {
         try {
             await invoke("disciplines.set_color", { id: d.id, color });
             d.color = color;
-            colorDot.style.background = color;
             wrap.style.borderLeftColor = color;
             wrap.style.borderLeftWidth = "4px";
         } catch (err) {
@@ -512,17 +611,21 @@ async function renderDiscipline(d, refreshAll) {
     });
 
     const swatchBtn = h("button.smsys-tree-action.smsys-color-btn",
-        { title: "Set color", onClick: (e) => { e.stopPropagation(); colorInput.click(); } },
-        colorDot
+        {
+            title: "Set color",
+            "aria-label": `Change color of ${d.name}`,
+            onClick: (e) => { e.stopPropagation(); colorInput.click(); },
+        },
+        "color"
     );
     swatchBtn.appendChild(colorInput);
 
-    const dragHandle = h("span.smsys-drag-handle", { title: "Drag to reorder" }, "⠿");
+    const dragHandle = h("span.smsys-drag-handle",
+        { title: "Drag to reorder", "aria-label": `Drag to reorder ${d.name}` },
+        "⠿"
+    );
 
-    const discDueEl  = h("span.smsys-stat.is-due",  "·");
-    const discNewEl  = h("span.smsys-stat.is-new",  "·");
-    const discLrnEl  = h("span.smsys-stat.is-lrn",  "·");
-    const discStatsEl = h(".smsys-subject-stats.is-loading", null, discDueEl, discNewEl, discLrnEl);
+    const discStats = makeStatsPanel();
 
     const headerRow = h(".smsys-tree-row.is-discipline", {
         "data-status": d.study_status ?? "backlog",
@@ -533,11 +636,12 @@ async function renderDiscipline(d, refreshAll) {
         makeStatusDot(d, "discipline"),
         h("span.smsys-tree-name", d.name),
         h("span.smsys-badge", `${d.note_count} notes`),
-        discStatsEl,
+        discStats.statsEl,
         h(".smsys-tree-actions", null,
             h("button.smsys-tree-action",
                 {
                     title: "Move up",
+                    "aria-label": `Move ${d.name} up`,
                     onClick: async (e) => {
                         e.stopPropagation();
                         const container = wrap.parentElement;
@@ -553,6 +657,7 @@ async function renderDiscipline(d, refreshAll) {
             h("button.smsys-tree-action",
                 {
                     title: "Move down",
+                    "aria-label": `Move ${d.name} down`,
                     onClick: async (e) => {
                         e.stopPropagation();
                         const container = wrap.parentElement;
@@ -568,24 +673,32 @@ async function renderDiscipline(d, refreshAll) {
             swatchBtn,
             h("button.smsys-tree-action.smsys-tree-action--study",
                 { title: "Study every note under this discipline",
+                  "aria-label": `Study every note under ${d.name}`,
                   onClick: (e) => { e.stopPropagation(); onStudyDiscipline(d); } },
                 "study"
             ),
             h("button.smsys-tree-action",
                 { title: "Show every note under this discipline in Browser",
+                  "aria-label": `Show notes under ${d.name} in Browser`,
                   onClick: (e) => { e.stopPropagation(); onShowDisciplineNotes(d); } },
                 "show notes"
             ),
             h("button.smsys-tree-action",
-                { title: "Add subject", onClick: (e) => { e.stopPropagation(); onAddSubject(d, childrenEl, refreshAll); } },
+                { title: "Add subject",
+                  "aria-label": `Add subject to ${d.name}`,
+                  onClick: (e) => { e.stopPropagation(); onAddSubject(d, childrenEl, refreshAll); } },
                 "+ subject"
             ),
             h("button.smsys-tree-action",
-                { title: "Rename", onClick: (e) => { e.stopPropagation(); onRenameDiscipline(d, headerRow, refreshAll); } },
+                { title: "Rename",
+                  "aria-label": `Rename ${d.name}`,
+                  onClick: (e) => { e.stopPropagation(); onRenameDiscipline(d, headerRow, refreshAll); } },
                 "rename"
             ),
             h("button.smsys-tree-action.smsys-btn-danger",
-                { title: "Delete", onClick: (e) => { e.stopPropagation(); onDeleteDiscipline(d, headerRow, refreshAll); } },
+                { title: "Delete",
+                  "aria-label": `Delete ${d.name}`,
+                  onClick: (e) => { e.stopPropagation(); onDeleteDiscipline(d, headerRow, refreshAll); } },
                 "delete"
             ),
         )
@@ -595,7 +708,7 @@ async function renderDiscipline(d, refreshAll) {
     wrap.appendChild(childrenEl);
     wireDisciplineDrag(wrap, dragHandle, d);
     await loadSubjects(d.id, childrenEl, refreshAll);
-    return { wrap, statsEl: discStatsEl, dueEl: discDueEl, newEl: discNewEl, lrnEl: discLrnEl };
+    return { wrap, ...discStats };
 }
 
 // ============================================================
@@ -629,12 +742,7 @@ async function loadSubjects(disciplineId, container, refreshAll) {
         for (const stat of statsList) {
             const entry = statEls.get(stat.id);
             if (!entry) continue;
-            const { statsEl, dueEl, newEl, lrnEl } = entry;
-            statsEl.classList.remove("is-loading");
-            statsEl.classList.toggle("is-all-zero", stat.due === 0 && stat.new === 0 && stat.lrn === 0);
-            dueEl.textContent = `${stat.due} due`;
-            newEl.textContent = `${stat.new} new`;
-            lrnEl.textContent = `${stat.lrn} lrn`;
+            applyStat(entry, stat);
         }
     } catch (_) {
         for (const { statsEl } of statEls.values()) {
@@ -652,7 +760,7 @@ async function renderSubject(s, disciplineId, siblingContainer, refreshAll, stat
     const startCollapsed = localStorage.getItem(storageKey) !== "0";
     // Topics start collapsed by default to keep the tree compact.
 
-    const caretEl = h("span.smsys-tree-caret", startCollapsed ? "▸" : "▾");
+    const caretEl = makeCaret(!startCollapsed);
     if (startCollapsed) topicsEl.style.display = "none";
     let topicsLoaded = !startCollapsed;
 
@@ -660,7 +768,7 @@ async function renderSubject(s, disciplineId, siblingContainer, refreshAll, stat
         e.stopPropagation();
         const collapsed = topicsEl.style.display === "none";
         topicsEl.style.display = collapsed ? "" : "none";
-        caretEl.textContent = collapsed ? "▾" : "▸";
+        caretEl.classList.toggle("is-open", collapsed);
         localStorage.setItem(storageKey, collapsed ? "0" : "1");
         if (collapsed && !topicsLoaded) {
             topicsLoaded = true;
@@ -668,13 +776,13 @@ async function renderSubject(s, disciplineId, siblingContainer, refreshAll, stat
         }
     }
 
-    const dueEl  = h("span.smsys-stat.is-due",  "·");
-    const newEl  = h("span.smsys-stat.is-new",  "·");
-    const lrnEl  = h("span.smsys-stat.is-lrn",  "·");
-    const statsEl = h(".smsys-subject-stats.is-loading", null, dueEl, newEl, lrnEl);
-    statEls.set(s.id, { statsEl, dueEl, newEl, lrnEl });
+    const stats = makeStatsPanel();
+    statEls.set(s.id, stats);
 
-    const dragHandle = h("span.smsys-drag-handle", { title: "Drag to reorder" }, "⠿");
+    const dragHandle = h("span.smsys-drag-handle",
+        { title: "Drag to reorder", "aria-label": `Drag to reorder ${s.name}` },
+        "⠿"
+    );
     const row = h(".smsys-tree-row.is-subject", {
         "data-status": s.study_status ?? "backlog",
         onClick: toggleCollapse,
@@ -685,11 +793,12 @@ async function renderSubject(s, disciplineId, siblingContainer, refreshAll, stat
         h("span.smsys-tree-name", s.name),
         h("span.smsys-badge", `${s.note_count} notes`),
         s.topic_count > 0 && h("span.smsys-badge", `${s.topic_count} topic${s.topic_count === 1 ? "" : "s"}`),
-        statsEl,
+        stats.statsEl,
         h(".smsys-tree-actions", null,
             h("button.smsys-tree-action",
                 {
                     title: "Move up",
+                    "aria-label": `Move ${s.name} up`,
                     onClick: async (e) => {
                         e.stopPropagation();
                         const container = wrap.parentElement;
@@ -705,6 +814,7 @@ async function renderSubject(s, disciplineId, siblingContainer, refreshAll, stat
             h("button.smsys-tree-action",
                 {
                     title: "Move down",
+                    "aria-label": `Move ${s.name} down`,
                     onClick: async (e) => {
                         e.stopPropagation();
                         const container = wrap.parentElement;
@@ -719,30 +829,37 @@ async function renderSubject(s, disciplineId, siblingContainer, refreshAll, stat
             ),
             h("button.smsys-tree-action.smsys-tree-action--study",
                 { title: "Start a study session for this subject (incl. its topics)",
+                  "aria-label": `Study ${s.name} and its topics`,
                   onClick: (e) => { e.stopPropagation(); onStudySubject(s); } },
                 "study"
             ),
             h("button.smsys-tree-action",
                 { title: "Show notes in Browser",
+                  "aria-label": `Show notes under ${s.name} in Browser`,
                   onClick: (e) => { e.stopPropagation(); onShowSubjectNotes(s); } },
                 "show notes"
             ),
             h("button.smsys-tree-action",
-                { title: "Add topic", onClick: (e) => { e.stopPropagation(); onAddTopic(s, topicsEl, refreshAll); } },
+                { title: "Add topic",
+                  "aria-label": `Add topic to ${s.name}`,
+                  onClick: (e) => { e.stopPropagation(); onAddTopic(s, topicsEl, refreshAll); } },
                 "+ topic"
             ),
             h("button.smsys-tree-action",
                 { title: "Move all notes to another placement",
+                  "aria-label": `Move all notes from ${s.name} elsewhere`,
                   onClick: (e) => { e.stopPropagation(); onMoveAllNotes("subject", s, refreshAll); } },
                 "move all"
             ),
             h("button.smsys-tree-action",
                 { title: "Rename",
+                  "aria-label": `Rename ${s.name}`,
                   onClick: (e) => { e.stopPropagation(); onRenameSubject(s, row, refreshAll); } },
                 "rename"
             ),
             h("button.smsys-tree-action.smsys-btn-danger",
                 { title: "Delete",
+                  "aria-label": `Delete ${s.name}`,
                   onClick: (e) => { e.stopPropagation(); onDeleteSubject(s, row, refreshAll); } },
                 "delete"
             ),
@@ -779,13 +896,13 @@ async function loadTopics(subjectId, container, refreshAll) {
     const statEls = new Map();
 
     for (const t of topics) {
-        const dueEl = h("span.smsys-stat.is-due", "·");
-        const newEl = h("span.smsys-stat.is-new", "·");
-        const lrnEl = h("span.smsys-stat.is-lrn", "·");
-        const statsEl = h(".smsys-subject-stats.is-loading", null, dueEl, newEl, lrnEl);
-        statEls.set(t.id, { statsEl, dueEl, newEl, lrnEl });
+        const stats = makeStatsPanel();
+        statEls.set(t.id, stats);
 
-        const dragHandle = h("span.smsys-drag-handle", { title: "Drag to reorder" }, "⠿");
+        const dragHandle = h("span.smsys-drag-handle",
+            { title: "Drag to reorder", "aria-label": `Drag to reorder ${t.name}` },
+            "⠿"
+        );
         const row = h(".smsys-tree-row.is-topic", {
             "data-status": t.study_status ?? "backlog",
         },
@@ -793,11 +910,12 @@ async function loadTopics(subjectId, container, refreshAll) {
             makeStatusDot(t, "topic"),
             h("span.smsys-tree-name", t.name),
             h("span.smsys-badge", `${t.note_count} notes`),
-            statsEl,
+            stats.statsEl,
             h(".smsys-tree-actions", null,
                 h("button.smsys-tree-action",
                     {
                         title: "Move up",
+                        "aria-label": `Move ${t.name} up`,
                         onClick: async (e) => {
                             e.stopPropagation();
                             const prev = row.previousElementSibling;
@@ -812,6 +930,7 @@ async function loadTopics(subjectId, container, refreshAll) {
                 h("button.smsys-tree-action",
                     {
                         title: "Move down",
+                        "aria-label": `Move ${t.name} down`,
                         onClick: async (e) => {
                             e.stopPropagation();
                             const next = row.nextElementSibling;
@@ -825,26 +944,31 @@ async function loadTopics(subjectId, container, refreshAll) {
                 ),
                 h("button.smsys-tree-action.smsys-tree-action--study",
                     { title: "Start a study session for this topic",
+                      "aria-label": `Study ${t.name}`,
                       onClick: () => onStudyTopic(t) },
                     "study"
                 ),
                 h("button.smsys-tree-action",
                     { title: "Show notes in Browser",
+                      "aria-label": `Show notes under ${t.name} in Browser`,
                       onClick: () => onShowTopicNotes(t) },
                     "show notes"
                 ),
                 h("button.smsys-tree-action",
                     { title: "Move all notes to another placement",
+                      "aria-label": `Move all notes from ${t.name} elsewhere`,
                       onClick: () => onMoveAllNotes("topic", t, refreshAll) },
                     "move all"
                 ),
                 h("button.smsys-tree-action",
                     { title: "Rename",
+                      "aria-label": `Rename ${t.name}`,
                       onClick: () => onRenameTopic(t, row, refreshAll) },
                     "rename"
                 ),
                 h("button.smsys-tree-action.smsys-btn-danger",
                     { title: "Delete",
+                      "aria-label": `Delete ${t.name}`,
                       onClick: () => onDeleteTopic(t, row, refreshAll) },
                     "delete"
                 ),
@@ -860,12 +984,7 @@ async function loadTopics(subjectId, container, refreshAll) {
         for (const stat of statsList) {
             const entry = statEls.get(stat.id);
             if (!entry) continue;
-            const { statsEl, dueEl, newEl, lrnEl } = entry;
-            statsEl.classList.remove("is-loading");
-            statsEl.classList.toggle("is-all-zero", stat.due === 0 && stat.new === 0 && stat.lrn === 0);
-            dueEl.textContent = `${stat.due} due`;
-            newEl.textContent = `${stat.new} new`;
-            lrnEl.textContent = `${stat.lrn} lrn`;
+            applyStat(entry, stat);
         }
     } catch (_) {
         for (const { statsEl } of statEls.values()) {
