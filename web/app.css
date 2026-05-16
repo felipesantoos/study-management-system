@@ -185,6 +185,7 @@
 .smsys-nav-item {
     display: flex;
     align-items: center;
+    gap: var(--smsys-space-2);
     height: var(--smsys-space-10);
     padding: 0 var(--smsys-space-3);
     margin: 0 var(--smsys-space-2);
@@ -204,11 +205,17 @@
     background: var(--smsys-sidebar-active-bg);
     color: var(--smsys-sidebar-active-fg);
     font-weight: var(--smsys-weight-semibold);
+    box-shadow: inset 3px 0 0 var(--smsys-accent);
 }
 
 .smsys-nav-item:focus-visible {
     outline: 2px solid var(--smsys-brand-500);
     outline-offset: -2px;
+}
+
+.smsys-nav-icon {
+    flex-shrink: 0;
+    color: inherit;
 }
 
 /* ----- main ----- */
@@ -379,11 +386,44 @@
     transform: rotate(90deg);
 }
 
-.smsys-tree-name { flex: 1; }
+/* Name truncates with ellipsis; the title attribute exposes the full text on
+   hover so long names stay discoverable. min-width: 0 is required inside a
+   flex row, otherwise the intrinsic min-content width prevents shrinking and
+   the meta+actions get pushed off the right edge. */
+.smsys-tree-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Meta wrapper groups the "x notes / y subjects / z topics" badges and the
+   stats pill so they sit at a consistent right-edge position across the
+   discipline, subject, and topic rows. flex-shrink: 0 keeps the meta intact
+   while the name absorbs the available space. Inner badges and the stats
+   pill carry their own trailing margins, so no extra gap is needed here. */
+.smsys-tree-meta {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    margin-left: auto;
+}
+/* When meta is the last child of its row (e.g. before the actions reserve
+   takes over), the trailing margin of its final child becomes the gap to the
+   actions column. .smsys-badge and .smsys-subject-stats already supply 8px. */
 
 .smsys-tree-actions {
     display: flex;
+    justify-content: flex-end;
+    align-items: center;
     gap: var(--smsys-space-1);
+    flex-shrink: 0;
+    /* Reserve a consistent width for the action column so the meta group above
+       aligns vertically across discipline, subject, and topic rows even though
+       the topic row carries one fewer button. Sized for 8 × 26px icon buttons
+       (12px icon + 12px padding + 2px reserved border) plus 7 × 4px gaps. */
+    min-width: 240px;
     opacity: 0;
     transition: opacity var(--smsys-duration-micro) var(--smsys-ease);
 }
@@ -392,7 +432,7 @@
 .smsys-tree-action {
     display: inline-flex;
     align-items: center;
-    gap: 3px;
+    justify-content: center;
     background: transparent;
     /* Anki's default webview.css applies `button:hover { border: 1px solid var(--shadow) }`
      * globally, and `* { box-sizing: content-box }` means that border adds 2px to the
@@ -406,11 +446,15 @@
     padding: 2px 6px;
     border-radius: var(--smsys-radius-sm);
     white-space: nowrap;
+    transition: color var(--smsys-duration-micro) var(--smsys-ease),
+                filter var(--smsys-duration-micro) var(--smsys-ease);
 }
+/* Backgrounds removed per FDA-728 — icon-only buttons signal intent through
+   their per-action color, and hover only brightens the icon. */
 .smsys-tree-action:hover {
-    background: var(--smsys-bg);
+    background: transparent;
     border-color: transparent;
-    color: var(--smsys-fg);
+    filter: brightness(1.15);
 }
 .smsys-tree-action:focus-visible {
     outline: 2px solid var(--smsys-accent);
@@ -423,12 +467,15 @@
    so the focused action's outline doesn't appear over an invisible button. */
 .smsys-tree-actions:focus-within { opacity: 1; }
 
-.smsys-tree-action.smsys-tree-action--study { color: var(--smsys-accent); }
-.smsys-tree-action.smsys-tree-action--study:hover {
-    background: var(--smsys-bg);
-    border-color: transparent;
-    color: var(--smsys-accent);
-}
+/* Per-action colors (FDA-728). Each icon carries a distinct, semantically
+   meaningful hue so users can recognise actions at a glance without relying
+   on hover-revealed tooltips. */
+.smsys-tree-action.smsys-tree-action--study  { color: var(--smsys-accent); }
+.smsys-tree-action.smsys-tree-action--notes  { color: var(--smsys-disc-cyan); }
+.smsys-tree-action.smsys-tree-action--add    { color: var(--smsys-disc-green); }
+.smsys-tree-action.smsys-tree-action--move   { color: var(--smsys-disc-violet); }
+.smsys-tree-action.smsys-tree-action--edit   { color: var(--smsys-disc-amber); }
+.smsys-tree-action.smsys-tree-action--delete { color: var(--smsys-danger); }
 
 /* ----- discipline color swatch -----
  * The discipline color is now visually represented by the 4px left-edge

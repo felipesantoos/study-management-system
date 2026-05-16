@@ -13,10 +13,39 @@ import * as disciplinesRoute from "./routes/disciplines.js";
 import * as unassignedRoute from "./routes/unassigned.js";
 
 const NAV = [
-    { path: "/", label: "Home" },
-    { path: "/disciplines", label: "Disciplines & Topics" },
-    { path: "/unassigned", label: "Unassigned Notes", badgeId: "smsys-unassigned-badge" },
+    { path: "/", label: "Home", icon: "home" },
+    { path: "/disciplines", label: "Disciplines & Topics", icon: "layers" },
+    { path: "/unassigned", label: "Unassigned Notes", icon: "inbox", badgeId: "smsys-unassigned-badge" },
 ];
+
+// Inline SVG icons for the sidebar nav (16×16, stroke-based, currentColor).
+function makeSidebarIcon(name) {
+    const NS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("viewBox", "0 0 16 16");
+    svg.setAttribute("width", "14");
+    svg.setAttribute("height", "14");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("focusable", "false");
+    svg.setAttribute("fill", "none");
+    svg.setAttribute("stroke", "currentColor");
+    svg.setAttribute("stroke-width", "1.5");
+    svg.setAttribute("stroke-linecap", "round");
+    svg.setAttribute("stroke-linejoin", "round");
+    svg.classList.add("smsys-nav-icon");
+
+    const shapes = {
+        home:   ["M2.5 7L8 2l5.5 5v6.5h-4v-3h-3v3h-4V7z"],
+        layers: ["M8 1.5L1.5 5l6.5 3.5 6.5-3.5z", "M1.5 8l6.5 3.5 6.5-3.5", "M1.5 11l6.5 3.5 6.5-3.5"],
+        inbox:  ["M2 3.5h12v7.5H2V3.5z", "M2 9h3l1.5 2h3L11 9h3"],
+    };
+    for (const d of shapes[name] || []) {
+        const path = document.createElementNS(NS, "path");
+        path.setAttribute("d", d);
+        svg.appendChild(path);
+    }
+    return svg;
+}
 
 function buildShell() {
     const root = document.getElementById("smsys-root");
@@ -27,7 +56,7 @@ function buildShell() {
         ...NAV.map((item) => {
             const children = [item.label];
             if (item.badgeId) {
-                children.push(h("span.smsys-badge", { id: item.badgeId, style: { marginLeft: "6px", marginRight: "0" } }));
+                children.push(h("span.smsys-badge", { id: item.badgeId, style: { marginLeft: "auto", marginRight: "0" } }));
             }
             // Use a click handler + router.navigate instead of letting the
             // browser change window.location.hash via <a href="#/…">. Anki's
@@ -44,6 +73,7 @@ function buildShell() {
                         router.navigate(item.path);
                     },
                 },
+                makeSidebarIcon(item.icon),
                 ...children
             );
         })
