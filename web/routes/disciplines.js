@@ -162,10 +162,20 @@ async function loadSubjects(disciplineId, container, refreshAll) {
         container.appendChild(h(".smsys-empty", "No subjects in this discipline yet."));
         return;
     }
+
+    const statEls = new Map();
+
     for (const s of subjects) {
+        const dueEl  = h("span.smsys-stat.is-due",  "·");
+        const newEl  = h("span.smsys-stat.is-new",  "·");
+        const lrnEl  = h("span.smsys-stat.is-lrn",  "·");
+        const statsEl = h(".smsys-subject-stats.is-loading", null, dueEl, newEl, lrnEl);
+        statEls.set(s.id, { statsEl, dueEl, newEl, lrnEl });
+
         const row = h(".smsys-tree-row.is-subject", null,
             h("span.smsys-tree-name", s.name),
             h("span.smsys-badge", `${s.note_count} notes`),
+            statsEl,
             h(".smsys-tree-actions", null,
                 h("button.smsys-tree-action",
                     { title: "Show notes in Browser",
@@ -190,6 +200,25 @@ async function loadSubjects(disciplineId, container, refreshAll) {
             )
         );
         container.appendChild(row);
+    }
+
+    try {
+        const ids = subjects.map(s => s.id);
+        const statsList = await invoke("subjects.stats", { ids });
+        for (const stat of statsList) {
+            const entry = statEls.get(stat.id);
+            if (!entry) continue;
+            const { statsEl, dueEl, newEl, lrnEl } = entry;
+            statsEl.classList.remove("is-loading");
+            statsEl.classList.toggle("is-all-zero", stat.due === 0 && stat.new === 0 && stat.lrn === 0);
+            dueEl.textContent = `${stat.due} due`;
+            newEl.textContent = `${stat.new} new`;
+            lrnEl.textContent = `${stat.lrn} lrn`;
+        }
+    } catch (_) {
+        for (const { statsEl } of statEls.values()) {
+            statsEl.classList.replace("is-loading", "is-error");
+        }
     }
 }
 
