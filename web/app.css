@@ -1318,6 +1318,8 @@ mark.smsys-highlight {
 .smsys-status-picker {
     position: fixed;
     z-index: 2000;
+    display: flex;
+    flex-direction: column;
     background: var(--smsys-surface-popover);
     border: 1px solid var(--smsys-neutral-200);
     border-radius: 8px;
