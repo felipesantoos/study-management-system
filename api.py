@@ -22,11 +22,21 @@ from .db import db
 
 
 def _row_to_discipline(row: sqlite3.Row) -> dict[str, Any]:
-    return {"id": int(row["id"]), "name": row["name"], "color": row["color"]}
+    return {
+        "id": int(row["id"]),
+        "name": row["name"],
+        "color": row["color"],
+        "position": int(row["position"]),
+    }
 
 
 def _row_to_subject(row: sqlite3.Row) -> dict[str, Any]:
-    return {"id": int(row["id"]), "name": row["name"], "note_count": int(row["note_count"])}
+    return {
+        "id": int(row["id"]),
+        "name": row["name"],
+        "note_count": int(row["note_count"]),
+        "position": int(row["position"]),
+    }
 
 
 def _require_name(name: str, label: str) -> str:
@@ -76,6 +86,11 @@ def disciplines_delete(id: int) -> None:
     db().delete_discipline(int(id))
 
 
+@register("disciplines.reorder")
+def disciplines_reorder(ids: list) -> None:
+    db().reorder_disciplines([int(i) for i in ids])
+
+
 # ----- subjects ------------------------------------------------------
 
 
@@ -110,6 +125,11 @@ def subjects_rename(id: int, name: str) -> None:
 @register("subjects.delete")
 def subjects_delete(id: int) -> None:
     db().delete_subject(int(id))
+
+
+@register("subjects.reorder")
+def subjects_reorder(discipline_id: int, ids: list) -> None:
+    db().reorder_subjects(int(discipline_id), [int(i) for i in ids])
 
 
 @register("subjects.note_ids")
@@ -185,6 +205,100 @@ def notes_get_subject(note_id: int) -> dict[str, Any] | None:
         "discipline_id": int(row["discipline_id"]),
         "discipline_name": row["discipline_name"],
     }
+
+
+# ----- stats --------------------------------------------------------
+
+
+@register("stats.overview")
+def stats_overview() -> dict[str, Any]:
+    """Return aggregate counts across the whole collection."""
+    assert mw is not None and mw.col is not None
+    discipline_count = db().con.execute("SELECT COUNT(*) FROM disciplines").fetchone()[0]
+    subject_count = db().con.execute("SELECT COUNT(*) FROM subjects").fetchone()[0]
+    assigned_count = db().con.execute("SELECT COUNT(*) FROM note_subjects").fetchone()[0]
+    total_notes = len(mw.col.find_notes(""))
+    return {
+        "disciplines": int(discipline_count),
+        "subjects": int(subject_count),
+        "assigned_notes": int(assigned_count),
+        "unassigned_notes": max(0, int(total_notes) - int(assigned_count)),
+    }
+
+
+@register("stats.due_by_subject")
+def stats_due_by_subject(limit: int = 5) -> list[dict[str, Any]]:
+    """Return up to `limit` subjects sorted by due-today count descending.
+
+    Uses a single round-trip to each database regardless of subject count.
+    """
+    from collections import defaultdict
+
+    assert mw is not None
+    col = mw.col
+    today = col.sched.today
+
+    subject_rows = db().con.execute(
+        """
+        SELECT s.id, s.name AS subject_name,
+               d.name AS discipline_name, d.color AS discipline_color
+          FROM subjects s
+          JOIN disciplines d ON d.id = s.discipline_id
+        """
+    ).fetchall()
+    if not subject_rows:
+        return []
+
+    note_to_subject: dict[int, int] = {
+        int(note_id): int(subject_id)
+        for note_id, subject_id in db().con.execute(
+            "SELECT note_id, subject_id FROM note_subjects"
+        )
+    }
+    if not note_to_subject:
+        return []
+
+    all_note_ids = list(note_to_subject.keys())
+    placeholders = ",".join("?" * len(all_note_ids))
+    card_rows = col.db.all(
+        f"SELECT nid, queue, due FROM cards WHERE nid IN ({placeholders})",
+        *all_note_ids,
+    )
+
+    subject_stats: dict[int, dict[str, int]] = defaultdict(
+        lambda: {"due": 0, "new": 0, "lrn": 0}
+    )
+    for nid, queue, due in card_rows:
+        sid = note_to_subject.get(int(nid))
+        if sid is None:
+            continue
+        if queue == 0:
+            subject_stats[sid]["new"] += 1
+        elif queue == 2 and due <= today:
+            subject_stats[sid]["due"] += 1
+        elif queue == 1 or (queue == 3 and due <= today):
+            subject_stats[sid]["lrn"] += 1
+
+    subject_map = {int(r["id"]): r for r in subject_rows}
+    results = []
+    for sid, counts in subject_stats.items():
+        if counts["due"] + counts["new"] + counts["lrn"] == 0:
+            continue
+        row = subject_map.get(sid)
+        if row is None:
+            continue
+        results.append({
+            "id": sid,
+            "subject_name": row["subject_name"],
+            "discipline_name": row["discipline_name"],
+            "discipline_color": row["discipline_color"],
+            "due": counts["due"],
+            "new": counts["new"],
+            "lrn": counts["lrn"],
+        })
+
+    results.sort(key=lambda x: (-x["due"], -(x["new"] + x["lrn"])))
+    return results[: int(limit)]
 
 
 # ----- Anki window navigation ---------------------------------------
