@@ -741,7 +741,7 @@ async function renderDiscipline(d, refreshAll) {
             "aria-label": `Change color of ${d.name}`,
             onClick: (e) => { e.stopPropagation(); colorInput.click(); },
         },
-        makeActionIcon("droplet"), "Color"
+        makeActionIcon("droplet")
     );
     swatchBtn.appendChild(colorInput);
 
@@ -778,7 +778,7 @@ async function renderDiscipline(d, refreshAll) {
                         }
                     }
                 },
-                makeActionIcon("up"), "Up"
+                makeActionIcon("up")
             ),
             h("button.smsys-tree-action",
                 {
@@ -794,38 +794,38 @@ async function renderDiscipline(d, refreshAll) {
                         }
                     }
                 },
-                makeActionIcon("down"), "Down"
+                makeActionIcon("down")
             ),
             swatchBtn,
             h("button.smsys-tree-action.smsys-tree-action--study",
                 { title: "Study every note under this discipline",
                   "aria-label": `Study every note under ${d.name}`,
                   onClick: (e) => { e.stopPropagation(); onStudyDiscipline(d); } },
-                makeActionIcon("play"), "Study"
+                makeActionIcon("play")
             ),
             h("button.smsys-tree-action",
                 { title: "Show every note under this discipline in Browser",
                   "aria-label": `Show notes under ${d.name} in Browser`,
                   onClick: (e) => { e.stopPropagation(); onShowDisciplineNotes(d); } },
-                makeActionIcon("eye"), "Notes"
+                makeActionIcon("eye")
             ),
             h("button.smsys-tree-action",
                 { title: "Add subject",
                   "aria-label": `Add subject to ${d.name}`,
                   onClick: (e) => { e.stopPropagation(); onAddSubject(d, childrenEl, refreshAll); } },
-                makeActionIcon("plus"), "Subject"
+                makeActionIcon("plus")
             ),
             h("button.smsys-tree-action",
                 { title: "Rename",
                   "aria-label": `Rename ${d.name}`,
                   onClick: (e) => { e.stopPropagation(); onRenameDiscipline(d, headerRow, refreshAll); } },
-                makeActionIcon("pencil"), "Rename"
+                makeActionIcon("pencil")
             ),
             h("button.smsys-tree-action.smsys-btn-danger",
                 { title: "Delete",
                   "aria-label": `Delete ${d.name}`,
                   onClick: (e) => { e.stopPropagation(); onDeleteDiscipline(d, headerRow, refreshAll); } },
-                makeActionIcon("trash"), "Delete"
+                makeActionIcon("trash")
             ),
         )
     );
@@ -935,7 +935,7 @@ async function renderSubject(s, disciplineId, siblingContainer, refreshAll, stat
                         }
                     }
                 },
-                makeActionIcon("up"), "Up"
+                makeActionIcon("up")
             ),
             h("button.smsys-tree-action",
                 {
@@ -951,43 +951,43 @@ async function renderSubject(s, disciplineId, siblingContainer, refreshAll, stat
                         }
                     }
                 },
-                makeActionIcon("down"), "Down"
+                makeActionIcon("down")
             ),
             h("button.smsys-tree-action.smsys-tree-action--study",
                 { title: "Start a study session for this subject (incl. its topics)",
                   "aria-label": `Study ${s.name} and its topics`,
                   onClick: (e) => { e.stopPropagation(); onStudySubject(s); } },
-                makeActionIcon("play"), "Study"
+                makeActionIcon("play")
             ),
             h("button.smsys-tree-action",
                 { title: "Show notes in Browser",
                   "aria-label": `Show notes under ${s.name} in Browser`,
                   onClick: (e) => { e.stopPropagation(); onShowSubjectNotes(s); } },
-                makeActionIcon("eye"), "Notes"
+                makeActionIcon("eye")
             ),
             h("button.smsys-tree-action",
                 { title: "Add topic",
                   "aria-label": `Add topic to ${s.name}`,
                   onClick: (e) => { e.stopPropagation(); onAddTopic(s, topicsEl, refreshAll); } },
-                makeActionIcon("plus"), "Topic"
+                makeActionIcon("plus")
             ),
             h("button.smsys-tree-action",
                 { title: "Move all notes to another placement",
                   "aria-label": `Move all notes from ${s.name} elsewhere`,
                   onClick: (e) => { e.stopPropagation(); onMoveAllNotes("subject", s, refreshAll); } },
-                makeActionIcon("arrow-right"), "Move"
+                makeActionIcon("arrow-right")
             ),
             h("button.smsys-tree-action",
                 { title: "Rename",
                   "aria-label": `Rename ${s.name}`,
                   onClick: (e) => { e.stopPropagation(); onRenameSubject(s, row, refreshAll); } },
-                makeActionIcon("pencil"), "Rename"
+                makeActionIcon("pencil")
             ),
             h("button.smsys-tree-action.smsys-btn-danger",
                 { title: "Delete",
                   "aria-label": `Delete ${s.name}`,
                   onClick: (e) => { e.stopPropagation(); onDeleteSubject(s, row, refreshAll); } },
-                makeActionIcon("trash"), "Delete"
+                makeActionIcon("trash")
             ),
         )
     );
@@ -1051,7 +1051,7 @@ async function loadTopics(subjectId, container, refreshAll) {
                             }
                         }
                     },
-                    makeActionIcon("up"), "Up"
+                    makeActionIcon("up")
                 ),
                 h("button.smsys-tree-action",
                     {
@@ -1066,37 +1066,37 @@ async function loadTopics(subjectId, container, refreshAll) {
                             }
                         }
                     },
-                    makeActionIcon("down"), "Down"
+                    makeActionIcon("down")
                 ),
                 h("button.smsys-tree-action.smsys-tree-action--study",
                     { title: "Start a study session for this topic",
                       "aria-label": `Study ${t.name}`,
                       onClick: () => onStudyTopic(t) },
-                    makeActionIcon("play"), "Study"
+                    makeActionIcon("play")
                 ),
                 h("button.smsys-tree-action",
                     { title: "Show notes in Browser",
                       "aria-label": `Show notes under ${t.name} in Browser`,
                       onClick: () => onShowTopicNotes(t) },
-                    makeActionIcon("eye"), "Notes"
+                    makeActionIcon("eye")
                 ),
                 h("button.smsys-tree-action",
                     { title: "Move all notes to another placement",
                       "aria-label": `Move all notes from ${t.name} elsewhere`,
                       onClick: () => onMoveAllNotes("topic", t, refreshAll) },
-                    makeActionIcon("arrow-right"), "Move"
+                    makeActionIcon("arrow-right")
                 ),
                 h("button.smsys-tree-action",
                     { title: "Rename",
                       "aria-label": `Rename ${t.name}`,
                       onClick: () => onRenameTopic(t, row, refreshAll) },
-                    makeActionIcon("pencil"), "Rename"
+                    makeActionIcon("pencil")
                 ),
                 h("button.smsys-tree-action.smsys-btn-danger",
                     { title: "Delete",
                       "aria-label": `Delete ${t.name}`,
                       onClick: () => onDeleteTopic(t, row, refreshAll) },
-                    makeActionIcon("trash"), "Delete"
+                    makeActionIcon("trash")
                 ),
             )
         );
