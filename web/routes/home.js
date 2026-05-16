@@ -129,8 +129,15 @@ function statIcons(due, lrn, newCount) {
     );
 }
 
-function dueRow(subject, isTop) {
-    const color = subject.discipline_color || "var(--smsys-muted)";
+function studyTarget(target) {
+    if (target.kind === "discipline") {
+        return invoke("anki.study_discipline", { discipline_id: target.id });
+    }
+    return invoke("anki.study_subject", { subject_id: target.id });
+}
+
+function dueRow(target, isTop) {
+    const color = target.discipline_color || "var(--smsys-muted)";
 
     const studyBtn = h("button.smsys-btn.smsys-btn-primary.smsys-btn-sm", {
         type: "button",
@@ -139,7 +146,7 @@ function dueRow(subject, isTop) {
             const original = studyBtn.textContent;
             studyBtn.textContent = "Starting…";
             try {
-                await invoke("anki.study_subject", { subject_id: subject.id });
+                await studyTarget(target);
             } catch (e) {
                 toast(e.message || "Could not start study session.", { error: true });
                 studyBtn.disabled = false;
@@ -148,16 +155,24 @@ function dueRow(subject, isTop) {
         },
     }, "▶ Study");
 
+    // Discipline-direct rows have no subject name, so the discipline name
+    // takes the primary line and the secondary line is omitted.
+    const names = target.kind === "discipline"
+        ? h(".smsys-due-names", null,
+            h(".smsys-due-subject", target.discipline_name),
+        )
+        : h(".smsys-due-names", null,
+            h(".smsys-due-subject", target.subject_name),
+            h(".smsys-due-discipline", target.discipline_name),
+        );
+
     return h(".smsys-due-row" + (isTop ? ".is-top" : ""), null,
         h("span.smsys-due-disc-dot", {
             style: { background: color },
             "aria-hidden": "true",
         }),
-        h(".smsys-due-names", null,
-            h(".smsys-due-subject", subject.subject_name),
-            h(".smsys-due-discipline", subject.discipline_name),
-        ),
-        statIcons(subject.due, subject.lrn, subject.new),
+        names,
+        statIcons(target.due, target.lrn, target.new),
         studyBtn,
     );
 }
@@ -189,15 +204,15 @@ export async function render(container) {
     const { node: heroNode, startBtn } = buildHero(now);
     page.appendChild(heroNode);
 
-    // Track which top-priority subject the hero CTA should launch.
-    let topSubject = null;
+    // Track the top-priority target (subject or discipline) the hero CTA launches.
+    let topTarget = null;
     startBtn.onclick = async () => {
-        if (!topSubject) return;
+        if (!topTarget) return;
         startBtn.disabled = true;
         const original = startBtn.textContent;
         startBtn.textContent = "Starting…";
         try {
-            await invoke("anki.study_subject", { subject_id: topSubject.id });
+            await studyTarget(topTarget);
         } catch (e) {
             toast(e.message || "Could not start study session.", { error: true });
             startBtn.disabled = false;
@@ -246,7 +261,7 @@ export async function render(container) {
         const originalRefresh = refreshBtn.textContent;
         refreshBtn.textContent = "↺ Refreshing…";
 
-        const [overview, dueSubjects, statusCounts] = await Promise.all([
+        const [overview, dueTargets, statusCounts] = await Promise.all([
             invoke("stats.overview").catch(() => null),
             invoke("stats.due_by_subject", { limit: 5 }).catch(() => []),
             invoke("stats.status_summary").catch(() => null),
@@ -299,8 +314,8 @@ export async function render(container) {
 
         // ---- due list
         clear(dueList);
-        topSubject = null;
-        if (!dueSubjects || dueSubjects.length === 0) {
+        topTarget = null;
+        if (!dueTargets || dueTargets.length === 0) {
             dueList.appendChild(emptyState({
                 icon: EMPTY_ICONS.check,
                 title: "You're all caught up!",
@@ -308,10 +323,10 @@ export async function render(container) {
             }));
             startBtn.disabled = true;
         } else {
-            topSubject = dueSubjects[0];
+            topTarget = dueTargets[0];
             startBtn.disabled = false;
-            for (let i = 0; i < dueSubjects.length; i++) {
-                dueList.appendChild(dueRow(dueSubjects[i], i === 0));
+            for (let i = 0; i < dueTargets.length; i++) {
+                dueList.appendChild(dueRow(dueTargets[i], i === 0));
             }
         }
 

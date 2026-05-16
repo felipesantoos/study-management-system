@@ -447,25 +447,19 @@ def stats_status_summary() -> dict[str, int]:
 
 @register("stats.due_by_subject")
 def stats_due_by_subject(limit: int = 5) -> list[dict[str, Any]]:
-    """Return up to `limit` subjects sorted by due-today count descending.
+    """Return up to `limit` study targets sorted by due-today count descending.
 
-    Each subject aggregates notes assigned directly to it plus notes on its
-    topics. Notes attached directly to a discipline are not surfaced here.
+    Each target row carries a `kind`:
+    * `"subject"` aggregates notes assigned directly to the subject plus notes
+      on any of its topics.
+    * `"discipline"` aggregates notes attached directly to the discipline
+      (subject/topic notes belong to their own subject rows). This surfaces
+      discipline-level cards that would otherwise be invisible on Home — the
+      disciplines tree already counts them, so Home must too.
     """
     assert mw is not None
     col = mw.col
     today = col.sched.today
-
-    subject_rows = db().con.execute(
-        """
-        SELECT s.id, s.name AS subject_name,
-               d.name AS discipline_name, d.color AS discipline_color
-          FROM subjects s
-          JOIN disciplines d ON d.id = s.discipline_id
-        """
-    ).fetchall()
-    if not subject_rows:
-        return []
 
     note_to_subject: dict[int, int] = {}
     for note_id, subject_id in db().con.execute(
@@ -480,10 +474,17 @@ def stats_due_by_subject(limit: int = 5) -> list[dict[str, Any]]:
         """
     ):
         note_to_subject[int(note_id)] = int(subject_id)
-    if not note_to_subject:
+
+    note_to_discipline: dict[int, int] = {}
+    for note_id, discipline_id in db().con.execute(
+        "SELECT note_id, discipline_id FROM note_assignments WHERE discipline_id IS NOT NULL"
+    ):
+        note_to_discipline[int(note_id)] = int(discipline_id)
+
+    all_note_ids = list(note_to_subject.keys()) + list(note_to_discipline.keys())
+    if not all_note_ids:
         return []
 
-    all_note_ids = list(note_to_subject.keys())
     placeholders = ",".join("?" * len(all_note_ids))
     card_rows = col.db.all(
         f"SELECT nid, queue, due FROM cards WHERE nid IN ({placeholders})",
@@ -493,19 +494,45 @@ def stats_due_by_subject(limit: int = 5) -> list[dict[str, Any]]:
     subject_stats: dict[int, dict[str, int]] = defaultdict(
         lambda: {"due": 0, "new": 0, "lrn": 0}
     )
+    discipline_stats: dict[int, dict[str, int]] = defaultdict(
+        lambda: {"due": 0, "new": 0, "lrn": 0}
+    )
     for nid, queue, due in card_rows:
-        sid = note_to_subject.get(int(nid))
-        if sid is None:
-            continue
+        nid_int = int(nid)
+        sid = note_to_subject.get(nid_int)
+        if sid is not None:
+            bucket = subject_stats[sid]
+        else:
+            did = note_to_discipline.get(nid_int)
+            if did is None:
+                continue
+            bucket = discipline_stats[did]
         if queue == 0:
-            subject_stats[sid]["new"] += 1
+            bucket["new"] += 1
         elif queue == 2 and due <= today:
-            subject_stats[sid]["due"] += 1
+            bucket["due"] += 1
         elif queue == 1 or (queue == 3 and due <= today):
-            subject_stats[sid]["lrn"] += 1
+            bucket["lrn"] += 1
 
-    subject_map = {int(r["id"]): r for r in subject_rows}
-    results = []
+    subject_map = {
+        int(r["id"]): r
+        for r in db().con.execute(
+            """
+            SELECT s.id, s.name AS subject_name,
+                   d.name AS discipline_name, d.color AS discipline_color
+              FROM subjects s
+              JOIN disciplines d ON d.id = s.discipline_id
+            """
+        ).fetchall()
+    }
+    discipline_map = {
+        int(r["id"]): r
+        for r in db().con.execute(
+            "SELECT id, name AS discipline_name, color AS discipline_color FROM disciplines"
+        ).fetchall()
+    }
+
+    results: list[dict[str, Any]] = []
     for sid, counts in subject_stats.items():
         if counts["due"] + counts["new"] + counts["lrn"] == 0:
             continue
@@ -514,7 +541,24 @@ def stats_due_by_subject(limit: int = 5) -> list[dict[str, Any]]:
             continue
         results.append({
             "id": sid,
+            "kind": "subject",
             "subject_name": row["subject_name"],
+            "discipline_name": row["discipline_name"],
+            "discipline_color": row["discipline_color"],
+            "due": counts["due"],
+            "new": counts["new"],
+            "lrn": counts["lrn"],
+        })
+    for did, counts in discipline_stats.items():
+        if counts["due"] + counts["new"] + counts["lrn"] == 0:
+            continue
+        row = discipline_map.get(did)
+        if row is None:
+            continue
+        results.append({
+            "id": did,
+            "kind": "discipline",
+            "subject_name": None,
             "discipline_name": row["discipline_name"],
             "discipline_color": row["discipline_color"],
             "due": counts["due"],
