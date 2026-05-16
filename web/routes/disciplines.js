@@ -251,8 +251,29 @@ export async function render(container) {
             return;
         }
 
+        const discStatEls = new Map();
         for (const d of disciplines) {
-            treeEl.appendChild(await renderDiscipline(d, refresh));
+            const { wrap, statsEl, dueEl, newEl, lrnEl } = await renderDiscipline(d, refresh);
+            treeEl.appendChild(wrap);
+            discStatEls.set(d.id, { statsEl, dueEl, newEl, lrnEl });
+        }
+
+        try {
+            const ids = disciplines.map(d => d.id);
+            const statsList = await invoke("disciplines.stats", { ids });
+            for (const stat of statsList) {
+                const entry = discStatEls.get(stat.id);
+                if (!entry) continue;
+                entry.statsEl.classList.remove("is-loading");
+                entry.statsEl.classList.toggle("is-all-zero", stat.due === 0 && stat.new === 0 && stat.lrn === 0);
+                entry.dueEl.textContent = `${stat.due} due`;
+                entry.newEl.textContent = `${stat.new} new`;
+                entry.lrnEl.textContent = `${stat.lrn} lrn`;
+            }
+        } catch (_) {
+            for (const { statsEl } of discStatEls.values()) {
+                statsEl.classList.replace("is-loading", "is-error");
+            }
         }
 
         const q = filterInput.value.trim();
@@ -454,11 +475,17 @@ async function renderDiscipline(d, refreshAll) {
 
     const dragHandle = h("span.smsys-drag-handle", { title: "Drag to reorder" }, "⠿");
 
+    const discDueEl  = h("span.smsys-stat.is-due",  "·");
+    const discNewEl  = h("span.smsys-stat.is-new",  "·");
+    const discLrnEl  = h("span.smsys-stat.is-lrn",  "·");
+    const discStatsEl = h(".smsys-subject-stats.is-loading", null, discDueEl, discNewEl, discLrnEl);
+
     const headerRow = h(".smsys-tree-row.is-discipline", { onClick: toggleCollapse },
         dragHandle,
         caretEl,
         h("span.smsys-tree-name", d.name),
         h("span.smsys-badge", `${d.note_count} notes`),
+        discStatsEl,
         h(".smsys-tree-actions", null,
             h("button.smsys-tree-action",
                 {
@@ -520,7 +547,7 @@ async function renderDiscipline(d, refreshAll) {
     wrap.appendChild(childrenEl);
     wireDisciplineDrag(wrap, d);
     await loadSubjects(d.id, childrenEl, refreshAll);
-    return wrap;
+    return { wrap, statsEl: discStatsEl, dueEl: discDueEl, newEl: discNewEl, lrnEl: discLrnEl };
 }
 
 // ============================================================

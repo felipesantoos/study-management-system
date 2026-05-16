@@ -139,6 +139,22 @@ def disciplines_note_ids(id: int) -> list[int]:
     return [int(n) for n in db().note_ids_for_discipline(int(id))]
 
 
+@register("disciplines.stats")
+def disciplines_stats(ids: list) -> list[dict[str, Any]]:
+    """Return aggregated due / new / learning counts for a list of discipline IDs.
+
+    Counts include notes on subjects and topics within each discipline.
+    """
+    if not ids:
+        return []
+    result = []
+    for did in ids:
+        note_ids = [int(n) for n in db().note_ids_for_discipline(int(did))]
+        due, new, lrn = _bucket_card_counts(note_ids)
+        result.append({"id": int(did), "due": due, "new": new, "lrn": lrn})
+    return result
+
+
 # ----- subjects ------------------------------------------------------
 
 
