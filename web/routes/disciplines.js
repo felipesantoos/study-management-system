@@ -1,10 +1,14 @@
 import { h, clear } from "../lib/dom.js";
-import { invoke, safeInvoke, toast } from "../lib/bridge.js";
+import { invoke, toast } from "../lib/bridge.js";
 
-let dragState = null; // { type: 'discipline'|'subject', id, disciplineId? }
+let dragState = null; // { type, id, disciplineId?, subjectId? }
+
+// ============================================================
+// Reordering
+// ============================================================
 
 async function reorderDisciplines(container) {
-    const ids = [...container.querySelectorAll(".smsys-tree-discipline")]
+    const ids = [...container.querySelectorAll(":scope > .smsys-tree-discipline")]
         .map(el => parseInt(el.dataset.id, 10));
     try {
         await invoke("disciplines.reorder", { ids });
@@ -14,10 +18,20 @@ async function reorderDisciplines(container) {
 }
 
 async function reorderSubjects(container, disciplineId) {
-    const ids = [...container.querySelectorAll(".smsys-tree-row.is-subject")]
+    const ids = [...container.querySelectorAll(":scope > .smsys-tree-subject")]
         .map(el => parseInt(el.dataset.id, 10));
     try {
         await invoke("subjects.reorder", { discipline_id: disciplineId, ids });
+    } catch (e) {
+        toast(e.message, { error: true });
+    }
+}
+
+async function reorderTopics(container, subjectId) {
+    const ids = [...container.querySelectorAll(":scope > .smsys-tree-row.is-topic")]
+        .map(el => parseInt(el.dataset.id, 10));
+    try {
+        await invoke("topics.reorder", { subject_id: subjectId, ids });
     } catch (e) {
         toast(e.message, { error: true });
     }
@@ -27,6 +41,10 @@ function clearDragOver() {
     document.querySelectorAll(".is-drag-over-before, .is-drag-over-after")
         .forEach(el => el.classList.remove("is-drag-over-before", "is-drag-over-after"));
 }
+
+// ============================================================
+// Drag wiring
+// ============================================================
 
 function wireDisciplineDrag(wrap, d) {
     wrap.draggable = true;
@@ -66,7 +84,7 @@ function wireDisciplineDrag(wrap, d) {
         if (!dragState || dragState.type !== "discipline" || dragState.id === d.id) return;
         e.preventDefault();
         const container = wrap.parentElement;
-        const srcEl = container.querySelector(`.smsys-tree-discipline[data-id="${dragState.id}"]`);
+        const srcEl = container.querySelector(`:scope > .smsys-tree-discipline[data-id="${dragState.id}"]`);
         if (!srcEl) return;
         const isAfter = wrap.classList.contains("is-drag-over-after");
         wrap.classList.remove("is-drag-over-before", "is-drag-over-after");
@@ -75,15 +93,67 @@ function wireDisciplineDrag(wrap, d) {
     });
 }
 
-function wireSubjectDrag(row, s, disciplineId, container) {
+function wireSubjectDrag(wrap, s, disciplineId, container) {
+    wrap.draggable = true;
+    wrap.dataset.id = s.id;
+
+    wrap.addEventListener("dragstart", e => {
+        dragState = { type: "subject", id: s.id, disciplineId };
+        wrap.classList.add("is-dragging");
+        e.dataTransfer.effectAllowed = "move";
+        const header = wrap.querySelector(".smsys-tree-row.is-subject");
+        if (header) e.dataTransfer.setDragImage(header, 16, header.offsetHeight / 2);
+        e.stopPropagation();
+    });
+
+    wrap.addEventListener("dragend", () => {
+        wrap.classList.remove("is-dragging");
+        clearDragOver();
+        dragState = null;
+    });
+
+    wrap.addEventListener("dragover", e => {
+        if (!dragState || dragState.type !== "subject"
+            || dragState.disciplineId !== disciplineId
+            || dragState.id === s.id) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        const rect = wrap.getBoundingClientRect();
+        const isAfter = e.clientY > rect.top + rect.height / 2;
+        wrap.classList.toggle("is-drag-over-before", !isAfter);
+        wrap.classList.toggle("is-drag-over-after", isAfter);
+    });
+
+    wrap.addEventListener("dragleave", e => {
+        if (!wrap.contains(e.relatedTarget)) {
+            wrap.classList.remove("is-drag-over-before", "is-drag-over-after");
+        }
+    });
+
+    wrap.addEventListener("drop", e => {
+        if (!dragState || dragState.type !== "subject"
+            || dragState.disciplineId !== disciplineId
+            || dragState.id === s.id) return;
+        e.preventDefault();
+        const srcEl = container.querySelector(`:scope > .smsys-tree-subject[data-id="${dragState.id}"]`);
+        if (!srcEl) return;
+        const isAfter = wrap.classList.contains("is-drag-over-after");
+        wrap.classList.remove("is-drag-over-before", "is-drag-over-after");
+        if (isAfter) { wrap.after(srcEl); } else { wrap.before(srcEl); }
+        reorderSubjects(container, disciplineId);
+    });
+}
+
+function wireTopicDrag(row, t, subjectId, container) {
     row.draggable = true;
-    row.dataset.id = s.id;
+    row.dataset.id = t.id;
 
     row.addEventListener("dragstart", e => {
-        dragState = { type: "subject", id: s.id, disciplineId };
+        dragState = { type: "topic", id: t.id, subjectId };
         row.classList.add("is-dragging");
         e.dataTransfer.effectAllowed = "move";
         e.dataTransfer.setDragImage(row, 16, row.offsetHeight / 2);
+        e.stopPropagation();
     });
 
     row.addEventListener("dragend", () => {
@@ -93,9 +163,9 @@ function wireSubjectDrag(row, s, disciplineId, container) {
     });
 
     row.addEventListener("dragover", e => {
-        if (!dragState || dragState.type !== "subject"
-            || dragState.disciplineId !== disciplineId
-            || dragState.id === s.id) return;
+        if (!dragState || dragState.type !== "topic"
+            || dragState.subjectId !== subjectId
+            || dragState.id === t.id) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
         const rect = row.getBoundingClientRect();
@@ -111,18 +181,22 @@ function wireSubjectDrag(row, s, disciplineId, container) {
     });
 
     row.addEventListener("drop", e => {
-        if (!dragState || dragState.type !== "subject"
-            || dragState.disciplineId !== disciplineId
-            || dragState.id === s.id) return;
+        if (!dragState || dragState.type !== "topic"
+            || dragState.subjectId !== subjectId
+            || dragState.id === t.id) return;
         e.preventDefault();
-        const srcEl = container.querySelector(`.smsys-tree-row.is-subject[data-id="${dragState.id}"]`);
+        const srcEl = container.querySelector(`:scope > .smsys-tree-row.is-topic[data-id="${dragState.id}"]`);
         if (!srcEl) return;
         const isAfter = row.classList.contains("is-drag-over-after");
         row.classList.remove("is-drag-over-before", "is-drag-over-after");
         if (isAfter) { row.after(srcEl); } else { row.before(srcEl); }
-        reorderSubjects(container, disciplineId);
+        reorderTopics(container, subjectId);
     });
 }
+
+// ============================================================
+// Page entry
+// ============================================================
 
 export async function render(container) {
     const page = h(".smsys-page");
@@ -130,7 +204,7 @@ export async function render(container) {
 
     page.appendChild(
         h(".smsys-page-header", null,
-            h("h1.smsys-page-title", "Disciplines & Subjects"),
+            h("h1.smsys-page-title", "Disciplines, Subjects & Topics"),
             h("div.smsys-page-actions", null,
                 h("button.smsys-btn",
                     { onClick: () => refresh() },
@@ -146,7 +220,7 @@ export async function render(container) {
 
     const filterInput = h("input.smsys-filter-input", {
         type: "search",
-        placeholder: "Filter disciplines and subjects…",
+        placeholder: "Filter disciplines, subjects, and topics…",
         onInput: e => applyFilter(e.target.value),
     });
     page.appendChild(h(".smsys-filter-bar", null, filterInput));
@@ -189,21 +263,31 @@ export async function render(container) {
 
     function applyFilter(raw) {
         const query = raw.trim().toLowerCase();
-        treeEl.querySelectorAll(".smsys-tree-discipline").forEach(wrap => {
-            const dNameEl = wrap.querySelector(":scope > .smsys-tree-row .smsys-tree-name");
-            const childrenEl = wrap.querySelector(".smsys-tree-children");
-            const caretEl = wrap.querySelector(".smsys-tree-caret");
-            const storageKey = wrap.dataset.storageKey;
+        treeEl.querySelectorAll(":scope > .smsys-tree-discipline").forEach(dWrap => {
+            const dNameEl = dWrap.querySelector(":scope > .smsys-tree-row .smsys-tree-name");
+            const dChildren = dWrap.querySelector(":scope > .smsys-tree-children");
+            const dCaret = dWrap.querySelector(":scope > .smsys-tree-row .smsys-tree-caret");
+            const dKey = dWrap.dataset.storageKey;
 
             if (!query) {
-                wrap.style.display = "";
-                const wasCollapsed = storageKey && localStorage.getItem(storageKey) === "1";
-                if (childrenEl) childrenEl.style.display = wasCollapsed ? "none" : "";
-                if (caretEl) caretEl.textContent = wasCollapsed ? "▸" : "▾";
-                if (childrenEl) {
-                    childrenEl.querySelectorAll(".smsys-tree-row.is-subject")
-                        .forEach(row => { row.style.display = ""; });
-                    childrenEl.querySelectorAll(".smsys-tree-name").forEach(restoreHighlight);
+                dWrap.style.display = "";
+                const wasCollapsed = dKey && localStorage.getItem(dKey) === "1";
+                if (dChildren) dChildren.style.display = wasCollapsed ? "none" : "";
+                if (dCaret) dCaret.textContent = wasCollapsed ? "▸" : "▾";
+                if (dChildren) {
+                    dChildren.querySelectorAll(".smsys-tree-subject")
+                        .forEach(sWrap => {
+                            sWrap.style.display = "";
+                            const sChildren = sWrap.querySelector(":scope > .smsys-tree-children");
+                            const sCaret = sWrap.querySelector(":scope > .smsys-tree-row .smsys-tree-caret");
+                            const sKey = sWrap.dataset.storageKey;
+                            const sWasCollapsed = sKey && localStorage.getItem(sKey) === "1";
+                            if (sChildren) sChildren.style.display = sWasCollapsed ? "none" : "";
+                            if (sCaret) sCaret.textContent = sWasCollapsed ? "▸" : "▾";
+                            sWrap.querySelectorAll(".smsys-tree-row.is-topic")
+                                .forEach(r => { r.style.display = ""; });
+                        });
+                    dChildren.querySelectorAll(".smsys-tree-name").forEach(restoreHighlight);
                 }
                 restoreHighlight(dNameEl);
                 return;
@@ -211,34 +295,56 @@ export async function render(container) {
 
             const dRaw = dNameEl ? (dNameEl.dataset.raw || dNameEl.textContent) : "";
             const dMatches = dRaw.toLowerCase().includes(query);
-            let anySubjectMatch = false;
+            let anyChildMatch = false;
 
-            if (childrenEl) {
-                childrenEl.querySelectorAll(".smsys-tree-row.is-subject").forEach(row => {
-                    const sNameEl = row.querySelector(".smsys-tree-name");
+            if (dChildren) {
+                dChildren.querySelectorAll(":scope > .smsys-tree-subject").forEach(sWrap => {
+                    const sNameEl = sWrap.querySelector(":scope > .smsys-tree-row .smsys-tree-name");
                     const sRaw = sNameEl ? (sNameEl.dataset.raw || sNameEl.textContent) : "";
                     const sMatches = sRaw.toLowerCase().includes(query);
-                    if (dMatches) {
-                        row.style.display = "";
-                        highlight(sNameEl, sRaw, query);
-                    } else if (sMatches) {
-                        anySubjectMatch = true;
-                        row.style.display = "";
+                    const sChildren = sWrap.querySelector(":scope > .smsys-tree-children");
+                    const sCaret = sWrap.querySelector(":scope > .smsys-tree-row .smsys-tree-caret");
+                    let anyTopicMatch = false;
+
+                    if (sChildren) {
+                        sChildren.querySelectorAll(":scope > .smsys-tree-row.is-topic").forEach(tRow => {
+                            const tNameEl = tRow.querySelector(".smsys-tree-name");
+                            const tRaw = tNameEl ? (tNameEl.dataset.raw || tNameEl.textContent) : "";
+                            const tMatches = tRaw.toLowerCase().includes(query);
+                            if (dMatches || sMatches) {
+                                tRow.style.display = "";
+                                highlight(tNameEl, tRaw, query);
+                            } else if (tMatches) {
+                                anyTopicMatch = true;
+                                tRow.style.display = "";
+                                highlight(tNameEl, tRaw, query);
+                            } else {
+                                tRow.style.display = "none";
+                                restoreHighlight(tNameEl);
+                            }
+                        });
+                    }
+
+                    if (dMatches || sMatches || anyTopicMatch) {
+                        anyChildMatch = true;
+                        sWrap.style.display = "";
+                        if (sChildren) sChildren.style.display = "";
+                        if (sCaret) sCaret.textContent = "▾";
                         highlight(sNameEl, sRaw, query);
                     } else {
-                        row.style.display = "none";
+                        sWrap.style.display = "none";
                         restoreHighlight(sNameEl);
                     }
                 });
             }
 
-            if (dMatches || anySubjectMatch) {
-                wrap.style.display = "";
-                if (childrenEl) childrenEl.style.display = "";
-                if (caretEl) caretEl.textContent = "▾";
+            if (dMatches || anyChildMatch) {
+                dWrap.style.display = "";
+                if (dChildren) dChildren.style.display = "";
+                if (dCaret) dCaret.textContent = "▾";
                 highlight(dNameEl, dRaw, query);
             } else {
-                wrap.style.display = "none";
+                dWrap.style.display = "none";
             }
         });
     }
@@ -291,6 +397,10 @@ export async function render(container) {
         );
     }
 }
+
+// ============================================================
+// Discipline render
+// ============================================================
 
 async function renderDiscipline(d, refreshAll) {
     const wrap = h(".smsys-tree-discipline");
@@ -380,6 +490,16 @@ async function renderDiscipline(d, refreshAll) {
                 "↓"
             ),
             swatchBtn,
+            h("button.smsys-tree-action.smsys-tree-action--study",
+                { title: "Study every note under this discipline",
+                  onClick: (e) => { e.stopPropagation(); onStudyDiscipline(d); } },
+                "study"
+            ),
+            h("button.smsys-tree-action",
+                { title: "Show every note under this discipline in Browser",
+                  onClick: (e) => { e.stopPropagation(); onShowDisciplineNotes(d); } },
+                "show notes"
+            ),
             h("button.smsys-tree-action",
                 { title: "Add subject", onClick: (e) => { e.stopPropagation(); onAddSubject(d, childrenEl, refreshAll); } },
                 "+ subject"
@@ -402,6 +522,10 @@ async function renderDiscipline(d, refreshAll) {
     return wrap;
 }
 
+// ============================================================
+// Subject layer
+// ============================================================
+
 async function loadSubjects(disciplineId, container, refreshAll) {
     clear(container);
     let subjects = [];
@@ -419,76 +543,8 @@ async function loadSubjects(disciplineId, container, refreshAll) {
     const statEls = new Map();
 
     for (const s of subjects) {
-        const dueEl  = h("span.smsys-stat.is-due",  "·");
-        const newEl  = h("span.smsys-stat.is-new",  "·");
-        const lrnEl  = h("span.smsys-stat.is-lrn",  "·");
-        const statsEl = h(".smsys-subject-stats.is-loading", null, dueEl, newEl, lrnEl);
-        statEls.set(s.id, { statsEl, dueEl, newEl, lrnEl });
-
-        const dragHandle = h("span.smsys-drag-handle", { title: "Drag to reorder" }, "⠿");
-        const row = h(".smsys-tree-row.is-subject", null,
-            dragHandle,
-            h("span.smsys-tree-name", s.name),
-            h("span.smsys-badge", `${s.note_count} notes`),
-            statsEl,
-            h(".smsys-tree-actions", null,
-                h("button.smsys-tree-action",
-                    {
-                        title: "Move up",
-                        onClick: async (e) => {
-                            e.stopPropagation();
-                            const prev = row.previousElementSibling;
-                            if (prev?.classList.contains("is-subject")) {
-                                container.insertBefore(row, prev);
-                                await reorderSubjects(container, disciplineId);
-                            }
-                        }
-                    },
-                    "↑"
-                ),
-                h("button.smsys-tree-action",
-                    {
-                        title: "Move down",
-                        onClick: async (e) => {
-                            e.stopPropagation();
-                            const next = row.nextElementSibling;
-                            if (next?.classList.contains("is-subject")) {
-                                container.insertBefore(next, row);
-                                await reorderSubjects(container, disciplineId);
-                            }
-                        }
-                    },
-                    "↓"
-                ),
-                h("button.smsys-tree-action.smsys-tree-action--study",
-                    { title: "Start a study session for this subject",
-                      onClick: () => onStudySubject(s) },
-                    "study now"
-                ),
-                h("button.smsys-tree-action",
-                    { title: "Show notes in Browser",
-                      onClick: () => onShowNotes(s) },
-                    "show notes"
-                ),
-                h("button.smsys-tree-action",
-                    { title: "Move all notes to another subject",
-                      onClick: () => onMoveAllNotes(s, refreshAll) },
-                    "move all"
-                ),
-                h("button.smsys-tree-action",
-                    { title: "Rename",
-                      onClick: () => onRenameSubject(s, row, refreshAll) },
-                    "rename"
-                ),
-                h("button.smsys-tree-action.smsys-btn-danger",
-                    { title: "Delete",
-                      onClick: () => onDeleteSubject(s, row, refreshAll) },
-                    "delete"
-                ),
-            )
-        );
-        wireSubjectDrag(row, s, disciplineId, container);
-        container.appendChild(row);
+        const subjectWrap = await renderSubject(s, disciplineId, container, refreshAll, statEls);
+        container.appendChild(subjectWrap);
     }
 
     try {
@@ -511,6 +567,233 @@ async function loadSubjects(disciplineId, container, refreshAll) {
     }
 }
 
+async function renderSubject(s, disciplineId, siblingContainer, refreshAll, statEls) {
+    const wrap = h(".smsys-tree-subject");
+    const topicsEl = h(".smsys-tree-children.is-topics");
+
+    const storageKey = `smsys_subject_collapsed_${s.id}`;
+    wrap.dataset.storageKey = storageKey;
+    const startCollapsed = localStorage.getItem(storageKey) !== "0";
+    // Topics start collapsed by default to keep the tree compact.
+
+    const caretEl = h("span.smsys-tree-caret", startCollapsed ? "▸" : "▾");
+    if (startCollapsed) topicsEl.style.display = "none";
+    let topicsLoaded = !startCollapsed;
+
+    async function toggleCollapse(e) {
+        e.stopPropagation();
+        const collapsed = topicsEl.style.display === "none";
+        topicsEl.style.display = collapsed ? "" : "none";
+        caretEl.textContent = collapsed ? "▾" : "▸";
+        localStorage.setItem(storageKey, collapsed ? "0" : "1");
+        if (collapsed && !topicsLoaded) {
+            topicsLoaded = true;
+            await loadTopics(s.id, topicsEl, refreshAll);
+        }
+    }
+
+    const dueEl  = h("span.smsys-stat.is-due",  "·");
+    const newEl  = h("span.smsys-stat.is-new",  "·");
+    const lrnEl  = h("span.smsys-stat.is-lrn",  "·");
+    const statsEl = h(".smsys-subject-stats.is-loading", null, dueEl, newEl, lrnEl);
+    statEls.set(s.id, { statsEl, dueEl, newEl, lrnEl });
+
+    const dragHandle = h("span.smsys-drag-handle", { title: "Drag to reorder" }, "⠿");
+    const row = h(".smsys-tree-row.is-subject", { onClick: toggleCollapse },
+        dragHandle,
+        caretEl,
+        h("span.smsys-tree-name", s.name),
+        h("span.smsys-badge", `${s.note_count} notes`),
+        statsEl,
+        h(".smsys-tree-actions", null,
+            h("button.smsys-tree-action",
+                {
+                    title: "Move up",
+                    onClick: async (e) => {
+                        e.stopPropagation();
+                        const container = wrap.parentElement;
+                        const prev = wrap.previousElementSibling;
+                        if (prev?.classList.contains("smsys-tree-subject")) {
+                            container.insertBefore(wrap, prev);
+                            await reorderSubjects(container, disciplineId);
+                        }
+                    }
+                },
+                "↑"
+            ),
+            h("button.smsys-tree-action",
+                {
+                    title: "Move down",
+                    onClick: async (e) => {
+                        e.stopPropagation();
+                        const container = wrap.parentElement;
+                        const next = wrap.nextElementSibling;
+                        if (next?.classList.contains("smsys-tree-subject")) {
+                            container.insertBefore(next, wrap);
+                            await reorderSubjects(container, disciplineId);
+                        }
+                    }
+                },
+                "↓"
+            ),
+            h("button.smsys-tree-action.smsys-tree-action--study",
+                { title: "Start a study session for this subject (incl. its topics)",
+                  onClick: (e) => { e.stopPropagation(); onStudySubject(s); } },
+                "study"
+            ),
+            h("button.smsys-tree-action",
+                { title: "Show notes in Browser",
+                  onClick: (e) => { e.stopPropagation(); onShowSubjectNotes(s); } },
+                "show notes"
+            ),
+            h("button.smsys-tree-action",
+                { title: "Add topic", onClick: (e) => { e.stopPropagation(); onAddTopic(s, topicsEl, refreshAll); } },
+                "+ topic"
+            ),
+            h("button.smsys-tree-action",
+                { title: "Move all notes to another placement",
+                  onClick: (e) => { e.stopPropagation(); onMoveAllNotes("subject", s, refreshAll); } },
+                "move all"
+            ),
+            h("button.smsys-tree-action",
+                { title: "Rename",
+                  onClick: (e) => { e.stopPropagation(); onRenameSubject(s, row, refreshAll); } },
+                "rename"
+            ),
+            h("button.smsys-tree-action.smsys-btn-danger",
+                { title: "Delete",
+                  onClick: (e) => { e.stopPropagation(); onDeleteSubject(s, row, refreshAll); } },
+                "delete"
+            ),
+        )
+    );
+
+    wrap.appendChild(row);
+    wrap.appendChild(topicsEl);
+    wireSubjectDrag(wrap, s, disciplineId, siblingContainer);
+    if (!startCollapsed) {
+        await loadTopics(s.id, topicsEl, refreshAll);
+    }
+    return wrap;
+}
+
+// ============================================================
+// Topic layer
+// ============================================================
+
+async function loadTopics(subjectId, container, refreshAll) {
+    clear(container);
+    let topics = [];
+    try {
+        topics = await invoke("topics.list", { subject_id: subjectId });
+    } catch (e) {
+        container.appendChild(h(".smsys-empty", `Error: ${e.message}`));
+        return;
+    }
+    if (!topics.length) {
+        container.appendChild(h(".smsys-empty.is-topic-empty", "No topics yet."));
+        return;
+    }
+
+    const statEls = new Map();
+
+    for (const t of topics) {
+        const dueEl = h("span.smsys-stat.is-due", "·");
+        const newEl = h("span.smsys-stat.is-new", "·");
+        const lrnEl = h("span.smsys-stat.is-lrn", "·");
+        const statsEl = h(".smsys-subject-stats.is-loading", null, dueEl, newEl, lrnEl);
+        statEls.set(t.id, { statsEl, dueEl, newEl, lrnEl });
+
+        const dragHandle = h("span.smsys-drag-handle", { title: "Drag to reorder" }, "⠿");
+        const row = h(".smsys-tree-row.is-topic", null,
+            dragHandle,
+            h("span.smsys-tree-name", t.name),
+            h("span.smsys-badge", `${t.note_count} notes`),
+            statsEl,
+            h(".smsys-tree-actions", null,
+                h("button.smsys-tree-action",
+                    {
+                        title: "Move up",
+                        onClick: async (e) => {
+                            e.stopPropagation();
+                            const prev = row.previousElementSibling;
+                            if (prev?.classList.contains("is-topic")) {
+                                container.insertBefore(row, prev);
+                                await reorderTopics(container, subjectId);
+                            }
+                        }
+                    },
+                    "↑"
+                ),
+                h("button.smsys-tree-action",
+                    {
+                        title: "Move down",
+                        onClick: async (e) => {
+                            e.stopPropagation();
+                            const next = row.nextElementSibling;
+                            if (next?.classList.contains("is-topic")) {
+                                container.insertBefore(next, row);
+                                await reorderTopics(container, subjectId);
+                            }
+                        }
+                    },
+                    "↓"
+                ),
+                h("button.smsys-tree-action.smsys-tree-action--study",
+                    { title: "Start a study session for this topic",
+                      onClick: () => onStudyTopic(t) },
+                    "study"
+                ),
+                h("button.smsys-tree-action",
+                    { title: "Show notes in Browser",
+                      onClick: () => onShowTopicNotes(t) },
+                    "show notes"
+                ),
+                h("button.smsys-tree-action",
+                    { title: "Move all notes to another placement",
+                      onClick: () => onMoveAllNotes("topic", t, refreshAll) },
+                    "move all"
+                ),
+                h("button.smsys-tree-action",
+                    { title: "Rename",
+                      onClick: () => onRenameTopic(t, row, refreshAll) },
+                    "rename"
+                ),
+                h("button.smsys-tree-action.smsys-btn-danger",
+                    { title: "Delete",
+                      onClick: () => onDeleteTopic(t, row, refreshAll) },
+                    "delete"
+                ),
+            )
+        );
+        wireTopicDrag(row, t, subjectId, container);
+        container.appendChild(row);
+    }
+
+    try {
+        const ids = topics.map(t => t.id);
+        const statsList = await invoke("topics.stats", { ids });
+        for (const stat of statsList) {
+            const entry = statEls.get(stat.id);
+            if (!entry) continue;
+            const { statsEl, dueEl, newEl, lrnEl } = entry;
+            statsEl.classList.remove("is-loading");
+            statsEl.classList.toggle("is-all-zero", stat.due === 0 && stat.new === 0 && stat.lrn === 0);
+            dueEl.textContent = `${stat.due} due`;
+            newEl.textContent = `${stat.new} new`;
+            lrnEl.textContent = `${stat.lrn} lrn`;
+        }
+    } catch (_) {
+        for (const { statsEl } of statEls.values()) {
+            statsEl.classList.replace("is-loading", "is-error");
+        }
+    }
+}
+
+// ============================================================
+// CRUD actions
+// ============================================================
+
 function onAddSubject(d, childrenEl, refreshAll) {
     dismissActiveInline();
     showInlineInput(
@@ -522,6 +805,25 @@ function onAddSubject(d, childrenEl, refreshAll) {
                     await invoke("subjects.create", { discipline_id: d.id, name });
                     toast("Subject created.");
                     await loadSubjects(d.id, childrenEl, refreshAll);
+                } catch (e) {
+                    toast(e.message, { error: true });
+                }
+            }
+        }
+    );
+}
+
+function onAddTopic(s, childrenEl, refreshAll) {
+    dismissActiveInline();
+    showInlineInput(
+        el => childrenEl.insertBefore(el, childrenEl.firstChild),
+        {
+            placeholder: `New topic under "${s.name}"`,
+            async onConfirm(name) {
+                try {
+                    await invoke("topics.create", { subject_id: s.id, name });
+                    toast("Topic created.");
+                    await loadTopics(s.id, childrenEl, refreshAll);
                 } catch (e) {
                     toast(e.message, { error: true });
                 }
@@ -556,7 +858,7 @@ function onDeleteDiscipline(d, anchorEl, refreshAll) {
     showInlineConfirm(
         el => anchorEl.after(el),
         {
-            message: `Delete "${d.name}" and all its subjects?`,
+            message: `Delete "${d.name}" and all its subjects + topics?`,
             async onConfirm() {
                 try {
                     await invoke("disciplines.delete", { id: d.id });
@@ -596,7 +898,7 @@ function onDeleteSubject(s, anchorEl, refreshAll) {
     showInlineConfirm(
         el => anchorEl.after(el),
         {
-            message: `Delete subject "${s.name}"? Note assignments will be cleared.`,
+            message: `Delete subject "${s.name}" and its topics? Note assignments will be cleared.`,
             async onConfirm() {
                 try {
                     await invoke("subjects.delete", { id: s.id });
@@ -610,6 +912,58 @@ function onDeleteSubject(s, anchorEl, refreshAll) {
     );
 }
 
+function onRenameTopic(t, anchorEl, refreshAll) {
+    dismissActiveInline();
+    showInlineInput(
+        el => anchorEl.after(el),
+        {
+            defaultValue: t.name,
+            placeholder: "Topic name",
+            async onConfirm(name) {
+                if (name === t.name) return;
+                try {
+                    await invoke("topics.rename", { id: t.id, name });
+                    toast("Renamed.");
+                    await refreshAll();
+                } catch (e) {
+                    toast(e.message, { error: true });
+                }
+            }
+        }
+    );
+}
+
+function onDeleteTopic(t, anchorEl, refreshAll) {
+    dismissActiveInline();
+    showInlineConfirm(
+        el => anchorEl.after(el),
+        {
+            message: `Delete topic "${t.name}"? Note assignments will be cleared.`,
+            async onConfirm() {
+                try {
+                    await invoke("topics.delete", { id: t.id });
+                    toast("Deleted.");
+                    await refreshAll();
+                } catch (e) {
+                    toast(e.message, { error: true });
+                }
+            }
+        }
+    );
+}
+
+// ============================================================
+// Study / browse actions
+// ============================================================
+
+async function onStudyDiscipline(d) {
+    try {
+        await invoke("anki.study_discipline", { discipline_id: d.id });
+    } catch (e) {
+        toast(e.message, { error: true });
+    }
+}
+
 async function onStudySubject(s) {
     try {
         await invoke("anki.study_subject", { subject_id: s.id });
@@ -618,11 +972,19 @@ async function onStudySubject(s) {
     }
 }
 
-async function onShowNotes(s) {
+async function onStudyTopic(t) {
     try {
-        const noteIds = await invoke("subjects.note_ids", { id: s.id });
+        await invoke("anki.study_topic", { topic_id: t.id });
+    } catch (e) {
+        toast(e.message, { error: true });
+    }
+}
+
+async function onShowDisciplineNotes(d) {
+    try {
+        const noteIds = await invoke("disciplines.note_ids", { id: d.id });
         if (!noteIds.length) {
-            toast("No notes assigned to this subject yet.");
+            toast("No notes under this discipline yet.");
             return;
         }
         await invoke("anki.open_browser_for_notes", { note_ids: noteIds });
@@ -631,16 +993,47 @@ async function onShowNotes(s) {
     }
 }
 
-async function onMoveAllNotes(source, refreshAll) {
+async function onShowSubjectNotes(s) {
+    try {
+        const noteIds = await invoke("subjects.note_ids", { id: s.id });
+        if (!noteIds.length) {
+            toast("No notes under this subject (or its topics) yet.");
+            return;
+        }
+        await invoke("anki.open_browser_for_notes", { note_ids: noteIds });
+    } catch (e) {
+        toast(e.message, { error: true });
+    }
+}
+
+async function onShowTopicNotes(t) {
+    try {
+        const noteIds = await invoke("topics.note_ids", { id: t.id });
+        if (!noteIds.length) {
+            toast("No notes assigned to this topic yet.");
+            return;
+        }
+        await invoke("anki.open_browser_for_notes", { note_ids: noteIds });
+    } catch (e) {
+        toast(e.message, { error: true });
+    }
+}
+
+// ============================================================
+// Move-all flow
+// ============================================================
+
+async function onMoveAllNotes(sourceKind, source, refreshAll) {
+    const ipcKind = sourceKind === "topic" ? "topics" : "subjects";
     let noteIds;
     try {
-        noteIds = await invoke("subjects.note_ids", { id: source.id });
+        noteIds = await invoke(`${ipcKind}.note_ids`, { id: source.id });
     } catch (e) {
         toast(e.message, { error: true });
         return;
     }
     if (!noteIds.length) {
-        toast("No notes to move from this subject.");
+        toast(`No notes to move from this ${sourceKind}.`);
         return;
     }
 
@@ -652,16 +1045,17 @@ async function onMoveAllNotes(source, refreshAll) {
         return;
     }
 
-    showSubjectPickerModal({
+    showAssignmentPickerModal({
         title: "Move all notes",
         statusText: `Moving ${noteIds.length} note${noteIds.length === 1 ? "" : "s"} from "${source.name}".`,
         disciplines,
-        excludeSubjectId: source.id,
-        async onConfirm(targetSubjectId) {
+        exclude: { kind: sourceKind, id: source.id },
+        async onConfirm({ kind, id }) {
             try {
                 const moved = await invoke("notes.bulk_assign", {
                     note_ids: noteIds,
-                    subject_id: targetSubjectId,
+                    target_kind: kind,
+                    target_id: id,
                 });
                 toast(`Moved ${moved} note${moved === 1 ? "" : "s"}.`);
                 await refreshAll();
@@ -671,6 +1065,10 @@ async function onMoveAllNotes(source, refreshAll) {
         },
     });
 }
+
+// ============================================================
+// Inline form helpers (unchanged)
+// ============================================================
 
 function dismissActiveInline() {
     document.querySelectorAll(".smsys-inline-form, .smsys-inline-confirm")
@@ -726,26 +1124,33 @@ function showInlineConfirm(insert, { message, onConfirm, onCancel }) {
     insert(widget);
 }
 
-function showSubjectPickerModal({
+// ============================================================
+// Assignment picker modal (Discipline → Subject → Topic)
+// ============================================================
+
+function showAssignmentPickerModal({
     title,
     statusText,
     disciplines,
-    excludeSubjectId = null,
+    exclude = null, // { kind, id }
     onConfirm,
     onCancel,
 }) {
-    let subjectsCache = new Map(); // discipline_id -> [subjects]
-    let chosenSubjectId = null;
+    const subjectsCache = new Map(); // discipline_id -> [subjects]
+    const topicsCache = new Map();   // subject_id -> [topics]
+    let chosen = null;
 
     const discSelect = h("select.smsys-modal-select",
         h("option", { value: "" }, "— Select a discipline —"),
-        ...disciplines.map(d =>
-            h("option", { value: String(d.id) }, d.name)
-        )
+        ...disciplines.map(d => h("option", { value: String(d.id) }, d.name))
     );
 
     const subjSelect = h("select.smsys-modal-select", { disabled: true },
-        h("option", { value: "" }, "— Select a subject —"),
+        h("option", { value: "" }, "— Pick a discipline first —"),
+    );
+
+    const topicSelect = h("select.smsys-modal-select", { disabled: true },
+        h("option", { value: "" }, "— Pick a subject first —"),
     );
 
     const saveBtn = h("button.smsys-btn.smsys-btn-primary",
@@ -753,14 +1158,25 @@ function showSubjectPickerModal({
         "Move"
     );
 
+    function statusFromChosen() {
+        if (!chosen) return "Pick at least a discipline.";
+        if (chosen.kind === "topic") return "Will move under selected topic.";
+        if (chosen.kind === "subject") return "Will move under selected subject (no topic).";
+        return "Will move under selected discipline (no subject, no topic).";
+    }
+    const placementHint = h("p.smsys-modal-hint", statusFromChosen());
+
     const overlay = h(".smsys-modal-overlay", { onClick: onOverlayClick },
         h(".smsys-modal", { onClick: e => e.stopPropagation() },
             h("h2.smsys-modal-title", title),
             statusText ? h("p.smsys-modal-status", statusText) : null,
             h(".smsys-modal-label", "Discipline"),
             discSelect,
-            h(".smsys-modal-label", "Subject"),
+            h(".smsys-modal-label", "Subject (optional)"),
             subjSelect,
+            h(".smsys-modal-label", "Topic (optional)"),
+            topicSelect,
+            placementHint,
             h(".smsys-modal-actions", null,
                 h("button.smsys-btn", { onClick: dismiss }, "Cancel"),
                 saveBtn,
@@ -770,25 +1186,26 @@ function showSubjectPickerModal({
 
     discSelect.addEventListener("change", onDisciplineChange);
     subjSelect.addEventListener("change", onSubjectChange);
+    topicSelect.addEventListener("change", onTopicChange);
     document.addEventListener("keydown", onKeydown);
 
     document.body.appendChild(overlay);
     discSelect.focus();
 
     async function onDisciplineChange() {
-        chosenSubjectId = null;
-        saveBtn.disabled = true;
-        subjSelect.disabled = true;
+        chosen = null;
+        clear(topicSelect);
+        topicSelect.appendChild(h("option", { value: "" }, "— Pick a subject first —"));
+        topicSelect.disabled = true;
         clear(subjSelect);
-        subjSelect.appendChild(
-            h("option", { value: "" }, "Loading…")
-        );
+        subjSelect.appendChild(h("option", { value: "" }, "Loading…"));
+        subjSelect.disabled = true;
+
         const dId = discSelect.value;
         if (!dId) {
             clear(subjSelect);
-            subjSelect.appendChild(
-                h("option", { value: "" }, "— Select a subject —")
-            );
+            subjSelect.appendChild(h("option", { value: "" }, "— Pick a discipline first —"));
+            updateChoice();
             return;
         }
         let subjects = subjectsCache.get(dId);
@@ -800,43 +1217,82 @@ function showSubjectPickerModal({
             } catch (e) {
                 toast(e.message, { error: true });
                 clear(subjSelect);
-                subjSelect.appendChild(
-                    h("option", { value: "" }, "— Select a subject —")
-                );
+                subjSelect.appendChild(h("option", { value: "" }, "(error)"));
                 return;
             }
             subjectsCache.set(dId, subjects);
         }
         clear(subjSelect);
-        subjSelect.appendChild(
-            h("option", { value: "" }, "— Select a subject —")
-        );
-        const eligible = subjects.filter(s => s.id !== excludeSubjectId);
-        if (!eligible.length) {
-            subjSelect.appendChild(
-                h("option", { value: "", disabled: true },
-                  "(no other subjects in this discipline)")
-            );
-        } else {
-            for (const s of eligible) {
-                subjSelect.appendChild(
-                    h("option", { value: String(s.id) }, s.name)
-                );
-            }
+        subjSelect.appendChild(h("option", { value: "" }, "— None (assign at discipline) —"));
+        for (const s of subjects) {
+            if (exclude?.kind === "subject" && exclude.id === s.id) continue;
+            subjSelect.appendChild(h("option", { value: String(s.id) }, s.name));
         }
         subjSelect.disabled = false;
+        updateChoice();
     }
 
-    function onSubjectChange() {
-        const v = subjSelect.value;
-        chosenSubjectId = v ? Number(v) : null;
-        saveBtn.disabled = chosenSubjectId == null;
+    async function onSubjectChange() {
+        clear(topicSelect);
+        topicSelect.appendChild(h("option", { value: "" }, "Loading…"));
+        topicSelect.disabled = true;
+        const sId = subjSelect.value;
+        if (!sId) {
+            clear(topicSelect);
+            topicSelect.appendChild(h("option", { value: "" }, "— Pick a subject first —"));
+            updateChoice();
+            return;
+        }
+        let topics = topicsCache.get(sId);
+        if (!topics) {
+            try {
+                topics = await invoke("topics.list", { subject_id: Number(sId) });
+            } catch (e) {
+                toast(e.message, { error: true });
+                clear(topicSelect);
+                topicSelect.appendChild(h("option", { value: "" }, "(error)"));
+                return;
+            }
+            topicsCache.set(sId, topics);
+        }
+        clear(topicSelect);
+        topicSelect.appendChild(h("option", { value: "" }, "— None (assign at subject) —"));
+        for (const t of topics) {
+            if (exclude?.kind === "topic" && exclude.id === t.id) continue;
+            topicSelect.appendChild(h("option", { value: String(t.id) }, t.name));
+        }
+        topicSelect.disabled = false;
+        updateChoice();
+    }
+
+    function onTopicChange() {
+        updateChoice();
+    }
+
+    function updateChoice() {
+        const dId = discSelect.value;
+        const sId = subjSelect.value;
+        const tId = topicSelect.value;
+        if (tId) {
+            chosen = { kind: "topic", id: Number(tId) };
+        } else if (sId) {
+            chosen = { kind: "subject", id: Number(sId) };
+        } else if (dId) {
+            chosen = { kind: "discipline", id: Number(dId) };
+        } else {
+            chosen = null;
+        }
+        if (chosen && exclude && chosen.kind === exclude.kind && chosen.id === exclude.id) {
+            chosen = null;
+        }
+        saveBtn.disabled = chosen == null;
+        placementHint.textContent = statusFromChosen();
     }
 
     function commit() {
-        if (chosenSubjectId == null) return;
+        if (chosen == null) return;
         teardown();
-        onConfirm(chosenSubjectId);
+        onConfirm(chosen);
     }
 
     function dismiss() {

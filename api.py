@@ -3,19 +3,22 @@
 Method naming uses dotted namespaces:
   disciplines.*  — disciplines CRUD
   subjects.*     — subjects CRUD + assignments lookup
-  notes.*        — note ↔ subject linkage
+  topics.*       — topics CRUD + assignments lookup
+  notes.*        — note ↔ (discipline | subject | topic) linkage
+  stats.*        — dashboard aggregates
   anki.*         — opens/uses native Anki windows (Browser, AddCards, …)
 """
 from __future__ import annotations
 
 import sqlite3
+from collections import defaultdict
 from typing import Any
 
 import aqt
 from aqt import mw
 
 from .bridge import register
-from .db import db
+from .db import ASSIGNMENT_KINDS, db
 
 
 # ----- helpers -------------------------------------------------------
@@ -39,11 +42,50 @@ def _row_to_subject(row: sqlite3.Row) -> dict[str, Any]:
     }
 
 
+def _row_to_topic(row: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "id": int(row["id"]),
+        "name": row["name"],
+        "note_count": int(row["note_count"]),
+        "position": int(row["position"]),
+    }
+
+
 def _require_name(name: str, label: str) -> str:
     name = (name or "").strip()
     if not name:
         raise ValueError(f"{label} name cannot be empty.")
     return name
+
+
+def _normalize_target(
+    target_kind: str | None, target_id: int | None
+) -> tuple[str | None, int | None]:
+    if target_kind is None or target_id is None:
+        return None, None
+    if target_kind not in ASSIGNMENT_KINDS:
+        raise ValueError(f"Unknown target kind: {target_kind!r}")
+    return target_kind, int(target_id)
+
+
+def _bucket_card_counts(
+    note_ids: list[int],
+) -> tuple[int, int, int]:
+    """Return (due, new, lrn) counts across the given notes."""
+    if not note_ids:
+        return 0, 0, 0
+    assert mw is not None
+    col = mw.col
+    today = col.sched.today
+    placeholders = ",".join("?" * len(note_ids))
+    rows = col.db.all(
+        f"SELECT queue, due FROM cards WHERE nid IN ({placeholders})",
+        *note_ids,
+    )
+    due = sum(1 for q, d in rows if q == 2 and d <= today)
+    new = sum(1 for q, d in rows if q == 0)
+    lrn = sum(1 for q, d in rows if q == 1 or (q == 3 and d <= today))
+    return due, new, lrn
 
 
 # ----- disciplines --------------------------------------------------
@@ -91,6 +133,11 @@ def disciplines_reorder(ids: list) -> None:
     db().reorder_disciplines([int(i) for i in ids])
 
 
+@register("disciplines.note_ids")
+def disciplines_note_ids(id: int) -> list[int]:
+    return [int(n) for n in db().note_ids_for_discipline(int(id))]
+
+
 # ----- subjects ------------------------------------------------------
 
 
@@ -136,53 +183,104 @@ def subjects_reorder(discipline_id: int, ids: list) -> None:
 def subjects_note_ids(id: int) -> list[int]:
     return [int(n) for n in db().note_ids_for_subject(int(id))]
 
+
 @register("subjects.stats")
 def subjects_stats(ids: list) -> list[dict[str, Any]]:
-    """Return due / new / learning card counts for a list of subject IDs.
+    """Return aggregated due / new / learning counts for the given subjects.
 
-    Reads queue/due columns from Anki's cards table directly so we don't
-    disturb the scheduler's internal state.  Queue semantics:
-      0 = new, 1 = intraday learning, 2 = review, 3 = interday learning.
+    Each subject's stats include notes assigned directly to the subject plus
+    notes assigned to any of its topics.
     """
     if not ids:
         return []
-    assert mw is not None
-    col = mw.col
-    today = col.sched.today
     result = []
     for sid in ids:
         note_ids = [int(n) for n in db().note_ids_for_subject(int(sid))]
-        if not note_ids:
-            result.append({"id": int(sid), "due": 0, "new": 0, "lrn": 0})
-            continue
-        placeholders = ",".join("?" * len(note_ids))
-        rows = col.db.all(
-            f"SELECT queue, due FROM cards WHERE nid IN ({placeholders})",
-            *note_ids,
-        )
-        due_count = sum(1 for q, d in rows if q == 2 and d <= today)
-        new_count = sum(1 for q, d in rows if q == 0)
-        lrn_count = sum(1 for q, d in rows if q == 1 or (q == 3 and d <= today))
-        result.append({"id": int(sid), "due": due_count, "new": new_count, "lrn": lrn_count})
+        due, new, lrn = _bucket_card_counts(note_ids)
+        result.append({"id": int(sid), "due": due, "new": new, "lrn": lrn})
     return result
 
 
-# ----- notes ↔ subjects ---------------------------------------------
+# ----- topics --------------------------------------------------------
+
+
+@register("topics.list")
+def topics_list(subject_id: int) -> list[dict[str, Any]]:
+    return [_row_to_topic(r) for r in db().list_topics(int(subject_id))]
+
+
+@register("topics.create")
+def topics_create(subject_id: int, name: str) -> dict[str, Any]:
+    name = _require_name(name, "Topic")
+    try:
+        new_id = db().add_topic(int(subject_id), name)
+    except sqlite3.IntegrityError:
+        raise ValueError(
+            f"A topic named '{name}' already exists in this subject."
+        )
+    return {"id": int(new_id), "name": name}
+
+
+@register("topics.rename")
+def topics_rename(id: int, name: str) -> None:
+    name = _require_name(name, "Topic")
+    try:
+        db().rename_topic(int(id), name)
+    except sqlite3.IntegrityError:
+        raise ValueError(
+            f"A topic named '{name}' already exists in this subject."
+        )
+
+
+@register("topics.delete")
+def topics_delete(id: int) -> None:
+    db().delete_topic(int(id))
+
+
+@register("topics.reorder")
+def topics_reorder(subject_id: int, ids: list) -> None:
+    db().reorder_topics(int(subject_id), [int(i) for i in ids])
+
+
+@register("topics.note_ids")
+def topics_note_ids(id: int) -> list[int]:
+    return [int(n) for n in db().note_ids_for_topic(int(id))]
+
+
+@register("topics.stats")
+def topics_stats(ids: list) -> list[dict[str, Any]]:
+    if not ids:
+        return []
+    result = []
+    for tid in ids:
+        note_ids = [int(n) for n in db().note_ids_for_topic(int(tid))]
+        due, new, lrn = _bucket_card_counts(note_ids)
+        result.append({"id": int(tid), "due": due, "new": new, "lrn": lrn})
+    return result
+
+
+# ----- notes ↔ {discipline, subject, topic} -------------------------
 
 
 @register("notes.assign")
-def notes_assign(note_id: int, subject_id: int | None) -> None:
-    db().assign_note(
-        int(note_id), int(subject_id) if subject_id is not None else None
-    )
+def notes_assign(
+    note_id: int,
+    target_kind: str | None = None,
+    target_id: int | None = None,
+) -> None:
+    kind, tid = _normalize_target(target_kind, target_id)
+    db().assign_note(int(note_id), kind, tid)
 
 
 @register("notes.bulk_assign")
-def notes_bulk_assign(note_ids: list[int], subject_id: int | None) -> int:
+def notes_bulk_assign(
+    note_ids: list[int],
+    target_kind: str | None = None,
+    target_id: int | None = None,
+) -> int:
     ids = [int(n) for n in note_ids]
-    db().bulk_assign(
-        ids, int(subject_id) if subject_id is not None else None
-    )
+    kind, tid = _normalize_target(target_kind, target_id)
+    db().bulk_assign(ids, kind, tid)
     return len(ids)
 
 
@@ -194,16 +292,29 @@ def notes_unassigned_ids() -> list[int]:
     return sorted(all_ids - assigned)
 
 
-@register("notes.get_subject")
-def notes_get_subject(note_id: int) -> dict[str, Any] | None:
-    row = db().get_note_subject(int(note_id))
+@register("notes.get_assignment")
+def notes_get_assignment(note_id: int) -> dict[str, Any] | None:
+    row = db().get_note_assignment(int(note_id))
     if row is None:
         return None
+    if row["direct_topic_id"] is not None:
+        kind = "topic"
+        target_id = int(row["direct_topic_id"])
+    elif row["direct_subject_id"] is not None:
+        kind = "subject"
+        target_id = int(row["direct_subject_id"])
+    else:
+        kind = "discipline"
+        target_id = int(row["direct_discipline_id"])
     return {
-        "subject_id": int(row["subject_id"]),
-        "subject_name": row["subject_name"],
-        "discipline_id": int(row["discipline_id"]),
+        "kind": kind,
+        "target_id": target_id,
+        "discipline_id": int(row["discipline_id"]) if row["discipline_id"] is not None else None,
         "discipline_name": row["discipline_name"],
+        "subject_id": int(row["subject_id"]) if row["subject_id"] is not None else None,
+        "subject_name": row["subject_name"],
+        "topic_id": int(row["topic_id"]) if row["topic_id"] is not None else None,
+        "topic_name": row["topic_name"],
     }
 
 
@@ -216,11 +327,15 @@ def stats_overview() -> dict[str, Any]:
     assert mw is not None and mw.col is not None
     discipline_count = db().con.execute("SELECT COUNT(*) FROM disciplines").fetchone()[0]
     subject_count = db().con.execute("SELECT COUNT(*) FROM subjects").fetchone()[0]
-    assigned_count = db().con.execute("SELECT COUNT(*) FROM note_subjects").fetchone()[0]
+    topic_count = db().con.execute("SELECT COUNT(*) FROM topics").fetchone()[0]
+    assigned_count = db().con.execute(
+        "SELECT COUNT(*) FROM note_assignments"
+    ).fetchone()[0]
     total_notes = len(mw.col.find_notes(""))
     return {
         "disciplines": int(discipline_count),
         "subjects": int(subject_count),
+        "topics": int(topic_count),
         "assigned_notes": int(assigned_count),
         "unassigned_notes": max(0, int(total_notes) - int(assigned_count)),
     }
@@ -230,10 +345,9 @@ def stats_overview() -> dict[str, Any]:
 def stats_due_by_subject(limit: int = 5) -> list[dict[str, Any]]:
     """Return up to `limit` subjects sorted by due-today count descending.
 
-    Uses a single round-trip to each database regardless of subject count.
+    Each subject aggregates notes assigned directly to it plus notes on its
+    topics. Notes attached directly to a discipline are not surfaced here.
     """
-    from collections import defaultdict
-
     assert mw is not None
     col = mw.col
     today = col.sched.today
@@ -249,12 +363,19 @@ def stats_due_by_subject(limit: int = 5) -> list[dict[str, Any]]:
     if not subject_rows:
         return []
 
-    note_to_subject: dict[int, int] = {
-        int(note_id): int(subject_id)
-        for note_id, subject_id in db().con.execute(
-            "SELECT note_id, subject_id FROM note_subjects"
-        )
-    }
+    note_to_subject: dict[int, int] = {}
+    for note_id, subject_id in db().con.execute(
+        "SELECT note_id, subject_id FROM note_assignments WHERE subject_id IS NOT NULL"
+    ):
+        note_to_subject[int(note_id)] = int(subject_id)
+    for note_id, subject_id in db().con.execute(
+        """
+        SELECT na.note_id, t.subject_id
+          FROM note_assignments na
+          JOIN topics t ON t.id = na.topic_id
+        """
+    ):
+        note_to_subject[int(note_id)] = int(subject_id)
     if not note_to_subject:
         return []
 
@@ -346,20 +467,10 @@ def anki_deck_browser() -> None:
     mw.moveToState("deckBrowser")
 
 
-@register("anki.study_subject")
-def anki_study_subject(subject_id: int) -> None:
-    """Create or rebuild a filtered deck for the subject and launch the reviewer."""
-    subject_id = int(subject_id)
-    row = db().get_subject(subject_id)
-    if row is None:
-        raise ValueError("Subject not found.")
-    note_ids = db().note_ids_for_subject(subject_id)
+def _launch_dynamic_deck(deck_name: str, note_ids: list[int]) -> None:
     if not note_ids:
-        raise ValueError("No notes assigned to this subject.")
-
-    deck_name = f"Study: {row['discipline_name']} \u203a {row['subject_name']}"
-    search = "nid:" + ",".join(str(n) for n in note_ids)
-
+        raise ValueError("No notes to study.")
+    search = "nid:" + ",".join(str(int(n)) for n in note_ids)
     assert mw is not None
     did = mw.col.decks.newDyn(deck_name)
     deck_dict = mw.col.decks.get(did)
@@ -369,3 +480,46 @@ def anki_study_subject(subject_id: int) -> None:
     mw.col.sched.rebuildDyn(did)
     mw.col.decks.select(did)
     mw.moveToState("review")
+
+
+@register("anki.study_subject")
+def anki_study_subject(subject_id: int) -> None:
+    """Create or rebuild a filtered deck for the subject and launch the reviewer."""
+    subject_id = int(subject_id)
+    row = db().get_subject(subject_id)
+    if row is None:
+        raise ValueError("Subject not found.")
+    note_ids = db().note_ids_for_subject(subject_id)
+    if not note_ids:
+        raise ValueError("No notes assigned to this subject (or its topics).")
+    deck_name = f"Study: {row['discipline_name']} › {row['subject_name']}"
+    _launch_dynamic_deck(deck_name, note_ids)
+
+
+@register("anki.study_topic")
+def anki_study_topic(topic_id: int) -> None:
+    topic_id = int(topic_id)
+    row = db().get_topic(topic_id)
+    if row is None:
+        raise ValueError("Topic not found.")
+    note_ids = db().note_ids_for_topic(topic_id)
+    if not note_ids:
+        raise ValueError("No notes assigned to this topic.")
+    deck_name = (
+        f"Study: {row['discipline_name']} › {row['subject_name']}"
+        f" › {row['topic_name']}"
+    )
+    _launch_dynamic_deck(deck_name, note_ids)
+
+
+@register("anki.study_discipline")
+def anki_study_discipline(discipline_id: int) -> None:
+    discipline_id = int(discipline_id)
+    row = db().get_discipline(discipline_id)
+    if row is None:
+        raise ValueError("Discipline not found.")
+    note_ids = db().note_ids_for_discipline(discipline_id)
+    if not note_ids:
+        raise ValueError("No notes assigned anywhere under this discipline.")
+    deck_name = f"Study: {row['name']}"
+    _launch_dynamic_deck(deck_name, note_ids)

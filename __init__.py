@@ -58,8 +58,29 @@ def open_study_manager() -> None:
 # ============================================================
 
 
-def _format_subject_label(row: sqlite3.Row) -> str:
-    return f"{row['discipline_name']} :: {row['subject_name']}"
+def _format_assignment_label(row: sqlite3.Row) -> str:
+    parts = [row["discipline_name"]]
+    if row["subject_name"]:
+        parts.append(row["subject_name"])
+    if row["topic_name"]:
+        parts.append(row["topic_name"])
+    return " › ".join(parts)
+
+
+def _direct_kind(row: sqlite3.Row) -> str:
+    if row["direct_topic_id"] is not None:
+        return "topic"
+    if row["direct_subject_id"] is not None:
+        return "subject"
+    return "discipline"
+
+
+def _direct_target_id(row: sqlite3.Row) -> int:
+    if row["direct_topic_id"] is not None:
+        return int(row["direct_topic_id"])
+    if row["direct_subject_id"] is not None:
+        return int(row["direct_subject_id"])
+    return int(row["direct_discipline_id"])
 
 
 def _open_assign_for_editor(editor: Editor) -> None:
@@ -67,31 +88,33 @@ def _open_assign_for_editor(editor: Editor) -> None:
         return
 
     if editor.note.id != 0:
-        current = db().get_note_subject(editor.note.id)
+        current = db().get_note_assignment(editor.note.id)
         status = (
-            f"Currently: <b>{_format_subject_label(current)}</b>"
+            f"Currently: <b>{_format_assignment_label(current)}</b>"
             if current
             else "Currently: <i>unassigned</i>"
         )
         dlg = AssignDialog(
             editor.parentWindow,
-            title="Assign Subject",
+            title="Assign Note",
             status_html=status,
-            initial_subject_id=current["subject_id"] if current else None,
+            initial_kind=_direct_kind(current) if current else None,
+            initial_id=_direct_target_id(current) if current else None,
         )
         if dlg.exec() == QDialog.DialogCode.Accepted:
-            db().assign_note(editor.note.id, dlg.chosen_subject_id)
-            tooltip("Subject updated.")
+            db().assign_note(editor.note.id, dlg.chosen_kind, dlg.chosen_id)
+            tooltip("Assignment updated.")
         return
 
     # Add window — stage on the editor; the pending value is applied after
     # the note is saved by `_on_note_added`.
-    pending = getattr(editor, "_pending_subject_id", None)
+    pending = getattr(editor, "_pending_assignment", None)
     if pending is not None:
-        row = db().get_subject(pending)
+        kind, target_id = pending
+        label = _label_for_target(kind, target_id)
         status = (
-            f"Will assign to: <b>{_format_subject_label(row)}</b>"
-            if row
+            f"Will assign to: <b>{label}</b>"
+            if label
             else "Will assign to: <i>(removed)</i>"
         )
     else:
@@ -99,15 +122,35 @@ def _open_assign_for_editor(editor: Editor) -> None:
 
     dlg = AssignDialog(
         editor.parentWindow,
-        title="Stage Subject for Next Note",
+        title="Stage Assignment for Next Note",
         status_html=status,
-        initial_subject_id=pending,
+        initial_kind=pending[0] if pending else None,
+        initial_id=pending[1] if pending else None,
     )
     if dlg.exec() == QDialog.DialogCode.Accepted:
-        editor._pending_subject_id = (  # type: ignore[attr-defined]
-            None if dlg.cleared else dlg.chosen_subject_id
+        editor._pending_assignment = (  # type: ignore[attr-defined]
+            None if dlg.cleared else (dlg.chosen_kind, dlg.chosen_id)
         )
-        tooltip("Staged. Click Add to save the note with this subject.")
+        tooltip("Staged. Click Add to save the note with this assignment.")
+
+
+def _label_for_target(kind: str, target_id: int) -> str | None:
+    if kind == "topic":
+        row = db().get_topic(int(target_id))
+        if row is None:
+            return None
+        return f"{row['discipline_name']} › {row['subject_name']} › {row['topic_name']}"
+    if kind == "subject":
+        row = db().get_subject(int(target_id))
+        if row is None:
+            return None
+        return f"{row['discipline_name']} › {row['subject_name']}"
+    if kind == "discipline":
+        row = db().get_discipline(int(target_id))
+        if row is None:
+            return None
+        return row["name"]
+    return None
 
 
 def _add_assign_button(buttons: list[str], editor: Editor) -> None:
@@ -115,8 +158,8 @@ def _add_assign_button(buttons: list[str], editor: Editor) -> None:
         icon=None,
         cmd="assign_subject",
         func=_open_assign_for_editor,
-        tip="Assign this note to a subject",
-        label="Subject",
+        tip="Assign this note to a discipline, subject, or topic",
+        label="Assign",
     )
     buttons.append(btn)
 
@@ -140,11 +183,12 @@ def _on_note_added(note: Note) -> None:
             continue
         if editor is None:
             continue
-        pending = getattr(editor, "_pending_subject_id", None)
+        pending = getattr(editor, "_pending_assignment", None)
         if pending is None:
             continue
+        kind, target_id = pending
         try:
-            db().assign_note(int(note.id), pending)
+            db().assign_note(int(note.id), kind, target_id)
         except sqlite3.Error:
             pass
         return
@@ -156,7 +200,7 @@ def _on_note_added(note: Note) -> None:
 
 
 def _on_browser_context_menu(browser: Any, menu: QMenu) -> None:
-    action = QAction("Assign Subject…", browser)
+    action = QAction("Assign to discipline / subject / topic…", browser)
     qconnect(action.triggered, lambda: _bulk_assign_from_browser(browser))
     menu.addAction(action)
 
@@ -167,21 +211,22 @@ def _bulk_assign_from_browser(browser: Any) -> None:
         showInfo("Select one or more notes first.")
         return
 
-    rows = [db().get_note_subject(int(n)) for n in nids]
+    rows = [db().get_note_assignment(int(n)) for n in nids]
     assigned = [r for r in rows if r is not None]
-    initial: int | None = None
+    initial_kind: str | None = None
+    initial_id: int | None = None
     if assigned:
         from collections import Counter
 
-        most_common_sid, _ = Counter(
-            r["subject_id"] for r in assigned
-        ).most_common(1)[0]
-        initial = most_common_sid
+        counter: Counter[tuple[str, int]] = Counter()
+        for r in assigned:
+            counter[(_direct_kind(r), _direct_target_id(r))] += 1
+        (initial_kind, initial_id), _ = counter.most_common(1)[0]
 
     if assigned and len(assigned) < len(nids):
         status = (
             f"<b>{len(nids)}</b> notes selected — "
-            f"<b>{len(assigned)}</b> already have a subject."
+            f"<b>{len(assigned)}</b> already have an assignment."
         )
     elif assigned:
         status = f"<b>{len(nids)}</b> notes selected — all currently assigned."
@@ -190,14 +235,15 @@ def _bulk_assign_from_browser(browser: Any) -> None:
 
     dlg = AssignDialog(
         browser,
-        title=f"Assign Subject to {len(nids)} Note(s)",
+        title=f"Assign {len(nids)} Note(s)",
         status_html=status,
-        initial_subject_id=initial,
+        initial_kind=initial_kind,
+        initial_id=initial_id,
     )
     if dlg.exec() != QDialog.DialogCode.Accepted:
         return
 
-    db().bulk_assign([int(n) for n in nids], dlg.chosen_subject_id)
+    db().bulk_assign([int(n) for n in nids], dlg.chosen_kind, dlg.chosen_id)
     if dlg.cleared:
         tooltip(f"Unassigned {len(nids)} note(s).")
     else:

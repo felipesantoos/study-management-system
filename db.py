@@ -13,6 +13,15 @@ from aqt import mw
 DB_FILENAME = "_study_management_system.db"
 
 
+ASSIGNMENT_KINDS = ("discipline", "subject", "topic")
+
+
+def _validate_kind(kind: str) -> str:
+    if kind not in ASSIGNMENT_KINDS:
+        raise ValueError(f"Unknown assignment kind: {kind!r}")
+    return kind
+
+
 class SubjectsDB:
     def __init__(self, path: str) -> None:
         self.con = sqlite3.connect(path)
@@ -34,16 +43,37 @@ class SubjectsDB:
                 name          TEXT NOT NULL,
                 UNIQUE(discipline_id, name)
             );
-            CREATE TABLE IF NOT EXISTS note_subjects (
-                note_id    INTEGER PRIMARY KEY,
+            CREATE TABLE IF NOT EXISTS topics (
+                id         INTEGER PRIMARY KEY,
                 subject_id INTEGER NOT NULL
-                    REFERENCES subjects(id) ON DELETE CASCADE
+                    REFERENCES subjects(id) ON DELETE CASCADE,
+                name       TEXT NOT NULL,
+                position   INTEGER NOT NULL DEFAULT 0,
+                UNIQUE(subject_id, name)
             );
-            CREATE INDEX IF NOT EXISTS idx_note_subjects_subject_id
-                ON note_subjects(subject_id);
+            CREATE INDEX IF NOT EXISTS idx_topics_subject_id
+                ON topics(subject_id);
+            CREATE TABLE IF NOT EXISTS note_assignments (
+                note_id       INTEGER PRIMARY KEY,
+                discipline_id INTEGER REFERENCES disciplines(id) ON DELETE CASCADE,
+                subject_id    INTEGER REFERENCES subjects(id)    ON DELETE CASCADE,
+                topic_id      INTEGER REFERENCES topics(id)      ON DELETE CASCADE,
+                CHECK (
+                    (CASE WHEN discipline_id IS NULL THEN 0 ELSE 1 END)
+                  + (CASE WHEN subject_id    IS NULL THEN 0 ELSE 1 END)
+                  + (CASE WHEN topic_id      IS NULL THEN 0 ELSE 1 END) = 1
+                )
+            );
+            CREATE INDEX IF NOT EXISTS idx_note_assignments_discipline_id
+                ON note_assignments(discipline_id);
+            CREATE INDEX IF NOT EXISTS idx_note_assignments_subject_id
+                ON note_assignments(subject_id);
+            CREATE INDEX IF NOT EXISTS idx_note_assignments_topic_id
+                ON note_assignments(topic_id);
             """
         )
         self.con.commit()
+
         disc_cols = {row[1] for row in self.con.execute("PRAGMA table_info(disciplines)")}
         if "color" not in disc_cols:
             self.con.execute("ALTER TABLE disciplines ADD COLUMN color TEXT")
@@ -76,6 +106,24 @@ class SubjectsDB:
                         "UPDATE subjects SET position = ? WHERE id = ?", (i, row[0])
                     )
         self.con.commit()
+
+        table_names = {
+            row[0]
+            for row in self.con.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+        }
+        if "note_subjects" in table_names:
+            self.con.execute(
+                """
+                INSERT OR IGNORE INTO note_assignments (note_id, subject_id)
+                SELECT note_id, subject_id FROM note_subjects
+                """
+            )
+            self.con.execute("DROP TABLE note_subjects")
+            self.con.commit()
+
+    # ----- disciplines -----------------------------------------------
 
     def list_disciplines(self) -> list[sqlite3.Row]:
         return list(
@@ -123,15 +171,29 @@ class SubjectsDB:
             )
         self.con.commit()
 
+    def get_discipline(self, discipline_id: int) -> sqlite3.Row | None:
+        return self.con.execute(
+            "SELECT id, name, color, position FROM disciplines WHERE id = ?",
+            (discipline_id,),
+        ).fetchone()
+
+    # ----- subjects --------------------------------------------------
+
     def list_subjects(self, discipline_id: int) -> list[sqlite3.Row]:
+        # `note_count` aggregates: notes directly on the subject + notes on
+        # any topic under it. That matches the "Subject owns its topics"
+        # rollup the UI wants to show.
         return list(
             self.con.execute(
                 """
-                SELECT s.id, s.name, s.position, COUNT(ns.note_id) AS note_count
+                SELECT s.id, s.name, s.position,
+                       (SELECT COUNT(*) FROM note_assignments
+                          WHERE subject_id = s.id)
+                     + (SELECT COUNT(*) FROM note_assignments na
+                          JOIN topics t ON t.id = na.topic_id
+                          WHERE t.subject_id = s.id) AS note_count
                   FROM subjects s
-                  LEFT JOIN note_subjects ns ON ns.subject_id = s.id
                  WHERE s.discipline_id = ?
-                 GROUP BY s.id, s.name, s.position
                  ORDER BY s.position, s.name
                 """,
                 (discipline_id,),
@@ -168,50 +230,6 @@ class SubjectsDB:
             )
         self.con.commit()
 
-    def assign_note(self, note_id: int, subject_id: int | None) -> None:
-        if subject_id is None:
-            self.con.execute(
-                "DELETE FROM note_subjects WHERE note_id = ?", (note_id,)
-            )
-        else:
-            self.con.execute(
-                "INSERT INTO note_subjects (note_id, subject_id) VALUES (?, ?)"
-                "  ON CONFLICT(note_id)"
-                "  DO UPDATE SET subject_id = excluded.subject_id",
-                (note_id, subject_id),
-            )
-        self.con.commit()
-
-    def bulk_assign(
-        self, note_ids: Sequence[int], subject_id: int | None
-    ) -> None:
-        if subject_id is None:
-            self.con.executemany(
-                "DELETE FROM note_subjects WHERE note_id = ?",
-                [(n,) for n in note_ids],
-            )
-        else:
-            self.con.executemany(
-                "INSERT INTO note_subjects (note_id, subject_id) VALUES (?, ?)"
-                "  ON CONFLICT(note_id)"
-                "  DO UPDATE SET subject_id = excluded.subject_id",
-                [(n, subject_id) for n in note_ids],
-            )
-        self.con.commit()
-
-    def get_note_subject(self, note_id: int) -> sqlite3.Row | None:
-        return self.con.execute(
-            """
-            SELECT s.id AS subject_id, s.name AS subject_name,
-                   d.id AS discipline_id, d.name AS discipline_name
-              FROM note_subjects ns
-              JOIN subjects s    ON s.id = ns.subject_id
-              JOIN disciplines d ON d.id = s.discipline_id
-             WHERE ns.note_id = ?
-            """,
-            (note_id,),
-        ).fetchone()
-
     def get_subject(self, subject_id: int) -> sqlite3.Row | None:
         return self.con.execute(
             """
@@ -224,23 +242,247 @@ class SubjectsDB:
             (subject_id,),
         ).fetchone()
 
-    def note_ids_for_subject(self, subject_id: int) -> list[int]:
+    # ----- topics ----------------------------------------------------
+
+    def list_topics(self, subject_id: int) -> list[sqlite3.Row]:
+        return list(
+            self.con.execute(
+                """
+                SELECT t.id, t.name, t.position, COUNT(na.note_id) AS note_count
+                  FROM topics t
+                  LEFT JOIN note_assignments na ON na.topic_id = t.id
+                 WHERE t.subject_id = ?
+                 GROUP BY t.id, t.name, t.position
+                 ORDER BY t.position, t.name
+                """,
+                (subject_id,),
+            )
+        )
+
+    def add_topic(self, subject_id: int, name: str) -> int:
+        max_pos = self.con.execute(
+            "SELECT COALESCE(MAX(position), -1) FROM topics WHERE subject_id = ?",
+            (subject_id,),
+        ).fetchone()[0]
+        cur = self.con.execute(
+            "INSERT INTO topics (subject_id, name, position) VALUES (?, ?, ?)",
+            (subject_id, name, max_pos + 1),
+        )
+        self.con.commit()
+        return cur.lastrowid
+
+    def rename_topic(self, topic_id: int, name: str) -> None:
+        self.con.execute(
+            "UPDATE topics SET name = ? WHERE id = ?", (name, topic_id)
+        )
+        self.con.commit()
+
+    def delete_topic(self, topic_id: int) -> None:
+        self.con.execute("DELETE FROM topics WHERE id = ?", (topic_id,))
+        self.con.commit()
+
+    def reorder_topics(self, subject_id: int, ordered_ids: list[int]) -> None:
+        for i, topic_id in enumerate(ordered_ids):
+            self.con.execute(
+                "UPDATE topics SET position = ? WHERE id = ?",
+                (i, topic_id),
+            )
+        self.con.commit()
+
+    def get_topic(self, topic_id: int) -> sqlite3.Row | None:
+        return self.con.execute(
+            """
+            SELECT t.id AS topic_id, t.name AS topic_name,
+                   s.id AS subject_id, s.name AS subject_name,
+                   d.id AS discipline_id, d.name AS discipline_name
+              FROM topics t
+              JOIN subjects s    ON s.id = t.subject_id
+              JOIN disciplines d ON d.id = s.discipline_id
+             WHERE t.id = ?
+            """,
+            (topic_id,),
+        ).fetchone()
+
+    # ----- note assignments -----------------------------------------
+
+    def assign_note(
+        self,
+        note_id: int,
+        target_kind: str | None,
+        target_id: int | None,
+    ) -> None:
+        if target_kind is None or target_id is None:
+            self.con.execute(
+                "DELETE FROM note_assignments WHERE note_id = ?", (note_id,)
+            )
+            self.con.commit()
+            return
+        _validate_kind(target_kind)
+        cols = {"discipline_id": None, "subject_id": None, "topic_id": None}
+        cols[f"{target_kind}_id"] = int(target_id)
+        self.con.execute(
+            """
+            INSERT INTO note_assignments
+                   (note_id, discipline_id, subject_id, topic_id)
+            VALUES (?, ?, ?, ?)
+              ON CONFLICT(note_id)
+              DO UPDATE SET
+                  discipline_id = excluded.discipline_id,
+                  subject_id    = excluded.subject_id,
+                  topic_id      = excluded.topic_id
+            """,
+            (
+                note_id,
+                cols["discipline_id"],
+                cols["subject_id"],
+                cols["topic_id"],
+            ),
+        )
+        self.con.commit()
+
+    def bulk_assign(
+        self,
+        note_ids: Sequence[int],
+        target_kind: str | None,
+        target_id: int | None,
+    ) -> None:
+        if not note_ids:
+            return
+        if target_kind is None or target_id is None:
+            self.con.executemany(
+                "DELETE FROM note_assignments WHERE note_id = ?",
+                [(int(n),) for n in note_ids],
+            )
+            self.con.commit()
+            return
+        _validate_kind(target_kind)
+        d_id = int(target_id) if target_kind == "discipline" else None
+        s_id = int(target_id) if target_kind == "subject" else None
+        t_id = int(target_id) if target_kind == "topic" else None
+        self.con.executemany(
+            """
+            INSERT INTO note_assignments
+                   (note_id, discipline_id, subject_id, topic_id)
+            VALUES (?, ?, ?, ?)
+              ON CONFLICT(note_id)
+              DO UPDATE SET
+                  discipline_id = excluded.discipline_id,
+                  subject_id    = excluded.subject_id,
+                  topic_id      = excluded.topic_id
+            """,
+            [(int(n), d_id, s_id, t_id) for n in note_ids],
+        )
+        self.con.commit()
+
+    def get_note_assignment(self, note_id: int) -> sqlite3.Row | None:
+        """Return the note's current placement plus the resolved chain of
+        names. Exactly one of (topic_id, subject_id, discipline_id) is
+        non-null in the row, but the chain (discipline_name, subject_name,
+        topic_name) is filled in as far up as the placement reaches."""
+        return self.con.execute(
+            """
+            SELECT na.note_id,
+                   na.discipline_id AS direct_discipline_id,
+                   na.subject_id    AS direct_subject_id,
+                   na.topic_id      AS direct_topic_id,
+                   COALESCE(d.id, sd.id, td.id) AS discipline_id,
+                   COALESCE(d.name, sd.name, td.name) AS discipline_name,
+                   COALESCE(s.id, ts.id) AS subject_id,
+                   COALESCE(s.name, ts.name) AS subject_name,
+                   t.id   AS topic_id,
+                   t.name AS topic_name
+              FROM note_assignments na
+              LEFT JOIN disciplines d  ON d.id  = na.discipline_id
+              LEFT JOIN subjects    s  ON s.id  = na.subject_id
+              LEFT JOIN disciplines sd ON sd.id = s.discipline_id
+              LEFT JOIN topics      t  ON t.id  = na.topic_id
+              LEFT JOIN subjects    ts ON ts.id = t.subject_id
+              LEFT JOIN disciplines td ON td.id = ts.discipline_id
+             WHERE na.note_id = ?
+            """,
+            (note_id,),
+        ).fetchone()
+
+    # ----- note lookups ---------------------------------------------
+
+    def note_ids_for_topic(self, topic_id: int) -> list[int]:
         return [
             row[0]
             for row in self.con.execute(
-                "SELECT note_id FROM note_subjects WHERE subject_id = ?",
-                (subject_id,),
+                "SELECT note_id FROM note_assignments WHERE topic_id = ?",
+                (topic_id,),
+            )
+        ]
+
+    def note_ids_for_subject(
+        self, subject_id: int, *, include_descendants: bool = True
+    ) -> list[int]:
+        if not include_descendants:
+            return [
+                row[0]
+                for row in self.con.execute(
+                    "SELECT note_id FROM note_assignments WHERE subject_id = ?",
+                    (subject_id,),
+                )
+            ]
+        return [
+            row[0]
+            for row in self.con.execute(
+                """
+                SELECT note_id FROM note_assignments WHERE subject_id = ?
+                UNION
+                SELECT na.note_id
+                  FROM note_assignments na
+                  JOIN topics t ON t.id = na.topic_id
+                 WHERE t.subject_id = ?
+                """,
+                (subject_id, subject_id),
+            )
+        ]
+
+    def note_ids_for_discipline(
+        self, discipline_id: int, *, include_descendants: bool = True
+    ) -> list[int]:
+        if not include_descendants:
+            return [
+                row[0]
+                for row in self.con.execute(
+                    "SELECT note_id FROM note_assignments WHERE discipline_id = ?",
+                    (discipline_id,),
+                )
+            ]
+        return [
+            row[0]
+            for row in self.con.execute(
+                """
+                SELECT note_id FROM note_assignments WHERE discipline_id = ?
+                UNION
+                SELECT na.note_id
+                  FROM note_assignments na
+                  JOIN subjects s ON s.id = na.subject_id
+                 WHERE s.discipline_id = ?
+                UNION
+                SELECT na.note_id
+                  FROM note_assignments na
+                  JOIN topics t    ON t.id = na.topic_id
+                  JOIN subjects s2 ON s2.id = t.subject_id
+                 WHERE s2.discipline_id = ?
+                """,
+                (discipline_id, discipline_id, discipline_id),
             )
         ]
 
     def assigned_note_ids(self) -> set[int]:
-        return {row[0] for row in self.con.execute("SELECT note_id FROM note_subjects")}
+        return {
+            row[0]
+            for row in self.con.execute("SELECT note_id FROM note_assignments")
+        }
 
     def delete_note_assignments(self, note_ids: Sequence[int]) -> None:
         if not note_ids:
             return
         self.con.executemany(
-            "DELETE FROM note_subjects WHERE note_id = ?",
+            "DELETE FROM note_assignments WHERE note_id = ?",
             [(int(n),) for n in note_ids],
         )
         self.con.commit()

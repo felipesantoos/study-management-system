@@ -65,6 +65,7 @@ export async function render(container) {
         h(".smsys-stat-tile.is-skeleton"),
         h(".smsys-stat-tile.is-skeleton"),
         h(".smsys-stat-tile.is-skeleton"),
+        h(".smsys-stat-tile.is-skeleton"),
     );
     page.appendChild(statGrid);
 
@@ -87,6 +88,7 @@ export async function render(container) {
     if (overview) {
         statGrid.appendChild(statTile(overview.disciplines, "Disciplines"));
         statGrid.appendChild(statTile(overview.subjects, "Subjects"));
+        statGrid.appendChild(statTile(overview.topics ?? 0, "Topics"));
         statGrid.appendChild(statTile(overview.assigned_notes, "Assigned notes"));
         statGrid.appendChild(statTile(overview.unassigned_notes, "Unassigned notes"));
     } else {
