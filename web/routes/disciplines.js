@@ -241,6 +241,19 @@ export async function render(container) {
     const treeEl = h(".smsys-tree");
     page.appendChild(treeEl);
 
+    // Tree-level dragover catch-all. Without this, when the cursor sits over
+    // the source's own wrap (or its descendants, or any wrap that bails on
+    // type/scope mismatch), no handler calls preventDefault and the browser
+    // shows the "not-allowed" cursor — making the user think dnd is broken.
+    // Accepting the drag tree-wide keeps the "move" cursor active everywhere;
+    // wrap-level handlers still control the drop-indicator highlight and the
+    // actual drop logic.
+    treeEl.addEventListener("dragover", e => {
+        if (!dragState) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+    });
+
     async function refresh() {
         clear(treeEl);
         treeEl.appendChild(h(".smsys-tree-skeleton"));
