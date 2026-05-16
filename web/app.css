@@ -420,28 +420,33 @@
    justify-items: end right-aligns each cell's content, and the per-row
    badge / stats margins are reset to 0 so only the grid's column-gap
    controls spacing. */
+/* Two-zone flex layout: [badges group | stats pill].
+   .smsys-meta-badges is a fixed-width flex container with justify-content:
+   flex-end so badges stack from the right. When a row type has only one badge
+   (topics), it naturally lands at the right edge of the zone — the same
+   position as the second badge in discipline/subject rows — giving perfect
+   cross-row alignment without empty placeholder nodes.
+   Zone widths: badges = 186px (78 notes + 8 gap + 100 children), stats = 120px.
+   Total = 186 + 8 gap + 120 = 314px. */
 .smsys-tree-meta {
-    display: grid;
-    grid-template-columns: 78px 100px 120px;
-    column-gap: var(--smsys-space-2);
+    display: flex;
+    gap: var(--smsys-space-2);
     align-items: center;
-    justify-items: end;
     flex-shrink: 0;
     margin-left: auto;
     margin-right: var(--smsys-space-2);
-    /* Lock the grid container's width so flex-basis intrinsic sizing can't
-       collapse a row whose middle slot is an empty placeholder (topic rows /
-       disc-with-no-subjects). 78 + 100 + 120 + 2 × 8 (column-gap) = 314. */
     width: 314px;
 }
-.smsys-tree-meta .smsys-badge { margin: 0; }
-/* Pin every meta child to its own column. With auto-flow alone the layout
-   was correct in theory, but explicit placement removes any ambiguity in
-   webview engines and guarantees the notes badge sits in column 1 on every
-   row type — including topic rows whose middle slot is an empty span. */
-.smsys-tree-meta .smsys-meta-notes    { grid-column: 1; }
-.smsys-tree-meta .smsys-meta-extra    { grid-column: 2; }
-.smsys-tree-meta .smsys-subject-stats { grid-column: 3; margin: 0; }
+.smsys-meta-badges {
+    display: flex;
+    gap: var(--smsys-space-2);
+    justify-content: flex-end;
+    align-items: center;
+    width: 186px;
+    flex-shrink: 0;
+}
+.smsys-meta-badges .smsys-badge { margin: 0; }
+.smsys-tree-meta .smsys-subject-stats { width: 120px; flex-shrink: 0; margin: 0; }
 
 .smsys-tree-actions {
     display: flex;
