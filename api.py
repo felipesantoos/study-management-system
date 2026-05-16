@@ -18,7 +18,7 @@ import aqt
 from aqt import mw
 
 from .bridge import register
-from .db import ASSIGNMENT_KINDS, db
+from .db import ASSIGNMENT_KINDS, STUDY_STATUSES, db
 from . import tagsync
 
 
@@ -32,6 +32,7 @@ def _row_to_discipline(row: sqlite3.Row) -> dict[str, Any]:
         "color": row["color"],
         "position": int(row["position"]),
         "note_count": int(row["note_count"]),
+        "study_status": row["study_status"],
     }
 
 
@@ -42,6 +43,7 @@ def _row_to_subject(row: sqlite3.Row) -> dict[str, Any]:
         "note_count": int(row["note_count"]),
         "topic_count": int(row["topic_count"]),
         "position": int(row["position"]),
+        "study_status": row["study_status"],
     }
 
 
@@ -51,6 +53,7 @@ def _row_to_topic(row: sqlite3.Row) -> dict[str, Any]:
         "name": row["name"],
         "note_count": int(row["note_count"]),
         "position": int(row["position"]),
+        "study_status": row["study_status"],
     }
 
 
@@ -353,6 +356,29 @@ def notes_get_assignment(note_id: int) -> dict[str, Any] | None:
         "subject_name": row["subject_name"],
         "topic_id": int(row["topic_id"]) if row["topic_id"] is not None else None,
         "topic_name": row["topic_name"],
+    }
+
+
+# ----- nodes (cross-kind) -------------------------------------------
+
+
+_NODE_KINDS = ("discipline", "subject", "topic")
+
+
+@register("nodes.set_status")
+def nodes_set_status(id: int, type: str, status: str) -> dict[str, Any]:
+    """Persist the study status for a discipline / subject / topic node."""
+    if type not in _NODE_KINDS:
+        raise ValueError(f"Unknown node type: {type!r}")
+    if status not in STUDY_STATUSES:
+        raise ValueError(f"Unknown study status: {status!r}")
+    row = db().set_node_status(type, int(id), status)
+    if row is None:
+        raise ValueError(f"{type.capitalize()} not found: id={id}")
+    return {
+        "id": int(row["id"]),
+        "type": type,
+        "study_status": row["study_status"],
     }
 
 

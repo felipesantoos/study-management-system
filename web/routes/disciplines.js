@@ -1,5 +1,21 @@
 import { h, clear } from "../lib/dom.js";
 import { invoke, toast } from "../lib/bridge.js";
+import { openStatusPicker, statusLabel } from "../lib/status-picker.js";
+
+function makeStatusDot(node, nodeType) {
+    const status = node.study_status ?? "backlog";
+    return h("button.smsys-status-dot", {
+        "data-status": status,
+        "aria-label": `Status: ${statusLabel(status)} — click to change`,
+        title: statusLabel(status),
+        type: "button",
+        onClick: (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            openStatusPicker(e.currentTarget, node.id, nodeType);
+        },
+    });
+}
 
 let dragState = null; // { type, id, disciplineId?, subjectId? }
 
@@ -506,9 +522,13 @@ async function renderDiscipline(d, refreshAll) {
     const discLrnEl  = h("span.smsys-stat.is-lrn",  "·");
     const discStatsEl = h(".smsys-subject-stats.is-loading", null, discDueEl, discNewEl, discLrnEl);
 
-    const headerRow = h(".smsys-tree-row.is-discipline", { onClick: toggleCollapse },
+    const headerRow = h(".smsys-tree-row.is-discipline", {
+        "data-status": d.study_status ?? "backlog",
+        onClick: toggleCollapse,
+    },
         dragHandle,
         caretEl,
+        makeStatusDot(d, "discipline"),
         h("span.smsys-tree-name", d.name),
         h("span.smsys-badge", `${d.note_count} notes`),
         discStatsEl,
@@ -653,9 +673,13 @@ async function renderSubject(s, disciplineId, siblingContainer, refreshAll, stat
     statEls.set(s.id, { statsEl, dueEl, newEl, lrnEl });
 
     const dragHandle = h("span.smsys-drag-handle", { title: "Drag to reorder" }, "⠿");
-    const row = h(".smsys-tree-row.is-subject", { onClick: toggleCollapse },
+    const row = h(".smsys-tree-row.is-subject", {
+        "data-status": s.study_status ?? "backlog",
+        onClick: toggleCollapse,
+    },
         dragHandle,
         caretEl,
+        makeStatusDot(s, "subject"),
         h("span.smsys-tree-name", s.name),
         h("span.smsys-badge", `${s.note_count} notes`),
         s.topic_count > 0 && h("span.smsys-badge", `${s.topic_count} topic${s.topic_count === 1 ? "" : "s"}`),
@@ -760,8 +784,11 @@ async function loadTopics(subjectId, container, refreshAll) {
         statEls.set(t.id, { statsEl, dueEl, newEl, lrnEl });
 
         const dragHandle = h("span.smsys-drag-handle", { title: "Drag to reorder" }, "⠿");
-        const row = h(".smsys-tree-row.is-topic", null,
+        const row = h(".smsys-tree-row.is-topic", {
+            "data-status": t.study_status ?? "backlog",
+        },
             dragHandle,
+            makeStatusDot(t, "topic"),
             h("span.smsys-tree-name", t.name),
             h("span.smsys-badge", `${t.note_count} notes`),
             statsEl,

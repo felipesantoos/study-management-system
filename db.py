@@ -15,11 +15,33 @@ DB_FILENAME = "_study_management_system.db"
 
 ASSIGNMENT_KINDS = ("discipline", "subject", "topic")
 
+STUDY_STATUSES = (
+    "backlog",
+    "todo",
+    "in-progress",
+    "blocked",
+    "done",
+    "archived",
+)
+
 
 def _validate_kind(kind: str) -> str:
     if kind not in ASSIGNMENT_KINDS:
         raise ValueError(f"Unknown assignment kind: {kind!r}")
     return kind
+
+
+def _validate_status(status: str) -> str:
+    if status not in STUDY_STATUSES:
+        raise ValueError(f"Unknown study status: {status!r}")
+    return status
+
+
+_NODE_KIND_TO_TABLE = {
+    "discipline": "disciplines",
+    "subject": "subjects",
+    "topic": "topics",
+}
 
 
 class SubjectsDB:
@@ -33,22 +55,25 @@ class SubjectsDB:
         self.con.executescript(
             """
             CREATE TABLE IF NOT EXISTS disciplines (
-                id   INTEGER PRIMARY KEY,
-                name TEXT NOT NULL UNIQUE
+                id           INTEGER PRIMARY KEY,
+                name         TEXT NOT NULL UNIQUE,
+                study_status TEXT NOT NULL DEFAULT 'backlog'
             );
             CREATE TABLE IF NOT EXISTS subjects (
                 id            INTEGER PRIMARY KEY,
                 discipline_id INTEGER NOT NULL
                     REFERENCES disciplines(id) ON DELETE CASCADE,
                 name          TEXT NOT NULL,
+                study_status  TEXT NOT NULL DEFAULT 'backlog',
                 UNIQUE(discipline_id, name)
             );
             CREATE TABLE IF NOT EXISTS topics (
-                id         INTEGER PRIMARY KEY,
-                subject_id INTEGER NOT NULL
+                id           INTEGER PRIMARY KEY,
+                subject_id   INTEGER NOT NULL
                     REFERENCES subjects(id) ON DELETE CASCADE,
-                name       TEXT NOT NULL,
-                position   INTEGER NOT NULL DEFAULT 0,
+                name         TEXT NOT NULL,
+                position     INTEGER NOT NULL DEFAULT 0,
+                study_status TEXT NOT NULL DEFAULT 'backlog',
                 UNIQUE(subject_id, name)
             );
             CREATE INDEX IF NOT EXISTS idx_topics_subject_id
@@ -88,6 +113,11 @@ class SubjectsDB:
                 self.con.execute(
                     "UPDATE disciplines SET position = ? WHERE id = ?", (i, row[0])
                 )
+        if "study_status" not in disc_cols:
+            self.con.execute(
+                "ALTER TABLE disciplines ADD COLUMN study_status TEXT "
+                "NOT NULL DEFAULT 'backlog'"
+            )
         subj_cols = {row[1] for row in self.con.execute("PRAGMA table_info(subjects)")}
         if "position" not in subj_cols:
             self.con.execute(
@@ -105,6 +135,17 @@ class SubjectsDB:
                     self.con.execute(
                         "UPDATE subjects SET position = ? WHERE id = ?", (i, row[0])
                     )
+        if "study_status" not in subj_cols:
+            self.con.execute(
+                "ALTER TABLE subjects ADD COLUMN study_status TEXT "
+                "NOT NULL DEFAULT 'backlog'"
+            )
+        topic_cols = {row[1] for row in self.con.execute("PRAGMA table_info(topics)")}
+        if "study_status" not in topic_cols:
+            self.con.execute(
+                "ALTER TABLE topics ADD COLUMN study_status TEXT "
+                "NOT NULL DEFAULT 'backlog'"
+            )
         self.con.commit()
 
         table_names = {
@@ -129,7 +170,7 @@ class SubjectsDB:
         return list(
             self.con.execute(
                 """
-                SELECT d.id, d.name, d.color, d.position,
+                SELECT d.id, d.name, d.color, d.position, d.study_status,
                        (SELECT COUNT(*) FROM note_assignments
                           WHERE discipline_id = d.id)
                      + (SELECT COUNT(*) FROM note_assignments na
@@ -186,7 +227,8 @@ class SubjectsDB:
 
     def get_discipline(self, discipline_id: int) -> sqlite3.Row | None:
         return self.con.execute(
-            "SELECT id, name, color, position FROM disciplines WHERE id = ?",
+            "SELECT id, name, color, position, study_status "
+            "FROM disciplines WHERE id = ?",
             (discipline_id,),
         ).fetchone()
 
@@ -199,7 +241,7 @@ class SubjectsDB:
         return list(
             self.con.execute(
                 """
-                SELECT s.id, s.name, s.position,
+                SELECT s.id, s.name, s.position, s.study_status,
                        (SELECT COUNT(*) FROM note_assignments
                           WHERE subject_id = s.id)
                      + (SELECT COUNT(*) FROM note_assignments na
@@ -263,11 +305,12 @@ class SubjectsDB:
         return list(
             self.con.execute(
                 """
-                SELECT t.id, t.name, t.position, COUNT(na.note_id) AS note_count
+                SELECT t.id, t.name, t.position, t.study_status,
+                       COUNT(na.note_id) AS note_count
                   FROM topics t
                   LEFT JOIN note_assignments na ON na.topic_id = t.id
                  WHERE t.subject_id = ?
-                 GROUP BY t.id, t.name, t.position
+                 GROUP BY t.id, t.name, t.position, t.study_status
                  ORDER BY t.position, t.name
                 """,
                 (subject_id,),
@@ -316,6 +359,27 @@ class SubjectsDB:
              WHERE t.id = ?
             """,
             (topic_id,),
+        ).fetchone()
+
+    # ----- node study status ----------------------------------------
+
+    def set_node_status(
+        self, node_kind: str, node_id: int, status: str
+    ) -> sqlite3.Row | None:
+        """Persist `study_status` for a discipline / subject / topic and
+        return the updated row (id, study_status)."""
+        if node_kind not in _NODE_KIND_TO_TABLE:
+            raise ValueError(f"Unknown node kind: {node_kind!r}")
+        _validate_status(status)
+        table = _NODE_KIND_TO_TABLE[node_kind]
+        self.con.execute(
+            f"UPDATE {table} SET study_status = ? WHERE id = ?",
+            (status, int(node_id)),
+        )
+        self.con.commit()
+        return self.con.execute(
+            f"SELECT id, study_status FROM {table} WHERE id = ?",
+            (int(node_id),),
         ).fetchone()
 
     # ----- note assignments -----------------------------------------
