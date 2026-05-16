@@ -128,6 +128,13 @@
     --smsys-highlight-bg:      rgba(13, 110, 253, 0.18);
     --smsys-focus-ring-bg:     rgba(13, 110, 253, 0.15);
     --smsys-color-dot-border:  rgba(0, 0, 0, 0.20);
+
+    /* Popover / picker surface tokens. Kept separate from --smsys-bg so popovers
+       have a distinct visual layer on light theme (off-white surface vs white page).
+       Dark theme overrides below mirror the existing dark behaviour. */
+    --smsys-surface-popover:   var(--smsys-neutral-50);        /* #f8fafc */
+    --smsys-shadow-popover:    0 4px 24px rgba(0,0,0,0.12), 0 1px 6px rgba(0,0,0,0.06);
+    --smsys-picker-item-hover: var(--smsys-neutral-200);       /* #e2e8f0 — visible on #f8fafc */
 }
 
 .night-mode {
@@ -150,6 +157,10 @@
 
     --smsys-highlight-bg:  rgba(78, 163, 255, 0.22);
     --smsys-focus-ring-bg: rgba(78, 163, 255, 0.18);
+
+    --smsys-surface-popover:   #252529;
+    --smsys-shadow-popover:    0 8px 32px rgba(0, 0, 0, 0.60);
+    --smsys-picker-item-hover: var(--smsys-hover);             /* #28282c */
 }
 
 #smsys-root {
@@ -1283,10 +1294,10 @@ mark.smsys-highlight {
 .smsys-status-picker {
     position: fixed;
     z-index: 2000;
-    background: var(--smsys-bg);
-    border: 1px solid var(--smsys-border);
+    background: var(--smsys-surface-popover);
+    border: 1px solid var(--smsys-neutral-200);
     border-radius: 8px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.18);
+    box-shadow: var(--smsys-shadow-popover);
     padding: 4px;
     min-width: 230px;
 }
@@ -1297,9 +1308,6 @@ mark.smsys-highlight {
 .smsys-status-picker:focus,
 .smsys-status-picker:focus-visible {
     outline: none;
-}
-.night-mode .smsys-status-picker {
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.60);
 }
 
 .smsys-status-picker-header {
@@ -1333,12 +1341,12 @@ mark.smsys-highlight {
 }
 .smsys-status-option:hover,
 .smsys-status-option.is-focused {
-    background: var(--smsys-hover);
+    background: var(--smsys-picker-item-hover);
     border-color: transparent;
 }
 .smsys-status-option.is-current { background: var(--smsys-sidebar-active-bg); }
 .smsys-status-option.is-current:hover,
-.smsys-status-option.is-current.is-focused { background: var(--smsys-hover); }
+.smsys-status-option.is-current.is-focused { background: var(--smsys-picker-item-hover); }
 .smsys-status-option.is-current .smsys-status-option-label { color: var(--smsys-accent); }
 .smsys-status-option + .smsys-status-option { margin-top: 2px; }
 .smsys-status-option:focus-visible { outline: none; }
