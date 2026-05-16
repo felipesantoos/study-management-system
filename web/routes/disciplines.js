@@ -21,6 +21,13 @@ export async function render(container) {
         )
     );
 
+    const filterInput = h("input.smsys-filter-input", {
+        type: "search",
+        placeholder: "Filter disciplines and subjects…",
+        onInput: e => applyFilter(e.target.value),
+    });
+    page.appendChild(h(".smsys-filter-bar", null, filterInput));
+
     const treeEl = h(".smsys-tree");
     page.appendChild(treeEl);
 
@@ -50,9 +57,97 @@ export async function render(container) {
         for (const d of disciplines) {
             treeEl.appendChild(await renderDiscipline(d, refresh));
         }
+
+        const q = filterInput.value.trim();
+        if (q) applyFilter(q);
     }
 
     await refresh();
+
+    function applyFilter(raw) {
+        const query = raw.trim().toLowerCase();
+        treeEl.querySelectorAll(".smsys-tree-discipline").forEach(wrap => {
+            const dNameEl = wrap.querySelector(":scope > .smsys-tree-row .smsys-tree-name");
+            const childrenEl = wrap.querySelector(".smsys-tree-children");
+            const caretEl = wrap.querySelector(".smsys-tree-caret");
+            const storageKey = wrap.dataset.storageKey;
+
+            if (!query) {
+                wrap.style.display = "";
+                const wasCollapsed = storageKey && localStorage.getItem(storageKey) === "1";
+                if (childrenEl) childrenEl.style.display = wasCollapsed ? "none" : "";
+                if (caretEl) caretEl.textContent = wasCollapsed ? "▸" : "▾";
+                if (childrenEl) {
+                    childrenEl.querySelectorAll(".smsys-tree-row.is-subject")
+                        .forEach(row => { row.style.display = ""; });
+                    childrenEl.querySelectorAll(".smsys-tree-name").forEach(restoreHighlight);
+                }
+                restoreHighlight(dNameEl);
+                return;
+            }
+
+            const dRaw = dNameEl ? (dNameEl.dataset.raw || dNameEl.textContent) : "";
+            const dMatches = dRaw.toLowerCase().includes(query);
+            let anySubjectMatch = false;
+
+            if (childrenEl) {
+                childrenEl.querySelectorAll(".smsys-tree-row.is-subject").forEach(row => {
+                    const sNameEl = row.querySelector(".smsys-tree-name");
+                    const sRaw = sNameEl ? (sNameEl.dataset.raw || sNameEl.textContent) : "";
+                    const sMatches = sRaw.toLowerCase().includes(query);
+                    if (dMatches) {
+                        row.style.display = "";
+                        highlight(sNameEl, sRaw, query);
+                    } else if (sMatches) {
+                        anySubjectMatch = true;
+                        row.style.display = "";
+                        highlight(sNameEl, sRaw, query);
+                    } else {
+                        row.style.display = "none";
+                        restoreHighlight(sNameEl);
+                    }
+                });
+            }
+
+            if (dMatches || anySubjectMatch) {
+                wrap.style.display = "";
+                if (childrenEl) childrenEl.style.display = "";
+                if (caretEl) caretEl.textContent = "▾";
+                highlight(dNameEl, dRaw, query);
+            } else {
+                wrap.style.display = "none";
+            }
+        });
+    }
+
+    function highlight(el, rawText, query) {
+        if (!el || !rawText || !query) return;
+        if (!el.dataset.raw) el.dataset.raw = rawText;
+        const text = el.dataset.raw;
+        const lc = text.toLowerCase();
+        const idx = lc.indexOf(query);
+        clear(el);
+        if (idx === -1) {
+            el.appendChild(document.createTextNode(text));
+            return;
+        }
+        if (idx > 0) el.appendChild(document.createTextNode(text.slice(0, idx)));
+        const mark = document.createElement("mark");
+        mark.className = "smsys-highlight";
+        mark.textContent = text.slice(idx, idx + query.length);
+        el.appendChild(mark);
+        if (idx + query.length < text.length) {
+            el.appendChild(document.createTextNode(text.slice(idx + query.length)));
+        }
+    }
+
+    function restoreHighlight(el) {
+        if (!el || !el.dataset.raw) return;
+        const raw = el.dataset.raw;
+        delete el.dataset.raw;
+        clear(el);
+        el.appendChild(document.createTextNode(raw));
+    }
 
     function onNewDiscipline() {
         dismissActiveInline();
@@ -84,6 +179,7 @@ async function renderDiscipline(d, refreshAll) {
     }
 
     const storageKey = `smsys_discipline_collapsed_${d.id}`;
+    wrap.dataset.storageKey = storageKey;
     const startCollapsed = localStorage.getItem(storageKey) === "1";
 
     const caretEl = h("span.smsys-tree-caret", startCollapsed ? "▸" : "▾");
@@ -177,6 +273,11 @@ async function loadSubjects(disciplineId, container, refreshAll) {
             h("span.smsys-badge", `${s.note_count} notes`),
             statsEl,
             h(".smsys-tree-actions", null,
+                h("button.smsys-tree-action.smsys-tree-action--study",
+                    { title: "Start a study session for this subject",
+                      onClick: () => onStudySubject(s) },
+                    "study now"
+                ),
                 h("button.smsys-tree-action",
                     { title: "Show notes in Browser",
                       onClick: () => onShowNotes(s) },
@@ -319,6 +420,14 @@ function onDeleteSubject(s, anchorEl, refreshAll) {
             }
         }
     );
+}
+
+async function onStudySubject(s) {
+    try {
+        await invoke("anki.study_subject", { subject_id: s.id });
+    } catch (e) {
+        toast(e.message, { error: true });
+    }
 }
 
 async function onShowNotes(s) {
